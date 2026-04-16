@@ -15,6 +15,6 @@ export {
 	readManifest,
 	updateManifest,
 	validateManifest
-} from "./project-state";
+} from "./project-state.js";
 
-export type { CreateManifestInput, ManifestPatch, OgManifest } from "./project-state";
+export type { CreateManifestInput, ManifestPatch, OgManifest } from "./project-state.js";
