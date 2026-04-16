@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsup src/index.ts --format esm,cjs --dts --out-dir dist",
-    "lint": "echo \"lint config will be added in step 2\"",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json",
     "test": "echo \"no tests yet\""
   },
   "dependencies": {

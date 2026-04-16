@@ -5,8 +5,16 @@
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "pnpm --filter @og/cli dev",
-    "build": "pnpm -r --filter ./apps/* --filter ./packages/* run build",
-    "lint": "pnpm -r run lint",
+    "build": "pnpm -r --filter './apps/*' --filter './packages/*' run build",
+    "lint": "pnpm -r --filter './apps/*' --filter './packages/*' run lint",
+    "typecheck": "pnpm -r --filter './apps/*' --filter './packages/*' run typecheck",
     "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@eslint/js": "^9.12.0",
+    "eslint": "^9.12.0",
+    "globals": "^15.11.0",
+    "typescript-eslint": "^8.8.1"
   }
 }

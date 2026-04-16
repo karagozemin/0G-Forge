@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/cli" },
+    { "path": "./packages/core" },
+    { "path": "./packages/compute-client" },
+    { "path": "./packages/deploy-vercel" },
+    { "path": "./packages/storage" }
+  ]
+}
