@@ -293,7 +293,7 @@ function createMockFileContent(
   targetPath: string
 ): string {
   if (targetPath.endsWith(".tsx")) {
-    return `export default function App() {\n  return (\n    <main style={{ padding: 24 }}>\n      <h1>${mode === "create" ? "New app" : "Updated app"}</h1>\n      <p>Prompt: ${prompt}</p>\n      <p>Template: ${template}</p>\n    </main>\n  );\n}\n`;
+    return `import React from "react";\n\nexport default function App() {\n  return (\n    <main style={{ padding: 24 }}>\n      <h1>${mode === "create" ? "New app" : "Updated app"}</h1>\n      <p>Prompt: ${prompt}</p>\n      <p>Template: ${template}</p>\n    </main>\n  );\n}\n`;
   }
 
   if (targetPath.endsWith(".html")) {
