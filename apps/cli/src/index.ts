@@ -30,6 +30,12 @@ import {
   resolvePreviewProjectRoot,
   runPreview
 } from "./preview-runner.js";
+import {
+  formatDeployCommand,
+  resolveDeployConfig,
+  resolveDeployProjectRoot,
+  runVercelDeploy
+} from "./deploy-runner.js";
 
 const program = new Command();
 
@@ -443,6 +449,54 @@ program
       }
 
       await runPreview(previewConfig, { open: options.open });
+    })
+  );
+
+const deployCommand = program.command("deploy").description("Deploy current og project");
+
+deployCommand
+  .command("vercel")
+  .description("Deploy current og project to Vercel")
+  .option("--prod", "Create a production deployment", false)
+  .option("--yes", "Run non-interactive deploy where supported", false)
+  .action(
+    withErrorHandling(async (options: { prod?: boolean; yes?: boolean }) => {
+      const projectRoot = await resolveDeployProjectRoot(process.cwd());
+      if (!projectRoot) {
+        throw new Error(
+          "No initialized og project found from current directory upward. Run `og init` first."
+        );
+      }
+
+      if (!(await isOgProject(projectRoot))) {
+        throw new Error("Current project is missing .og/manifest.json. Run `og init` first.");
+      }
+
+      const manifest = await readManifest(projectRoot);
+      const deployConfig = await resolveDeployConfig(projectRoot, manifest, {
+        prod: options.prod,
+        yes: options.yes
+      });
+
+      console.log(`Project path: ${projectRoot}`);
+      console.log(`Detected template: ${deployConfig.template}`);
+      console.log(`Deploy target: ${deployConfig.deployTarget}`);
+      console.log(`Command: ${formatDeployCommand(deployConfig)}`);
+
+      if (!options.yes) {
+        console.log("Deploy mode: interactive (Vercel CLI may ask for confirmation)");
+      }
+
+      const result = await runVercelDeploy(deployConfig);
+
+      if (result.deploymentUrl) {
+        console.log(`Deployment URL: ${result.deploymentUrl}`);
+      } else {
+        console.log("Deployment completed, but URL could not be parsed automatically.");
+        if (result.rawOutput.trim()) {
+          console.log(result.rawOutput.trim());
+        }
+      }
     })
   );
 
