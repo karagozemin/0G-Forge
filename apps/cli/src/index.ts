@@ -19,6 +19,11 @@ import {
   resolveTemplate,
   type SupportedTemplateId
 } from "./template-utils.js";
+import {
+  ComputeGenerationProvider,
+  applyPipelineResult,
+  runCreateEditPipeline
+} from "./create-edit-pipeline.js";
 
 const program = new Command();
 
@@ -73,6 +78,61 @@ async function resolveInitDefaultModel(explicitModel?: string): Promise<string> 
   }
 
   return "0g-medium";
+}
+
+type ResolveModelOptions = {
+  explicitModel?: string;
+  projectDir?: string;
+};
+
+async function resolveSelectedModel(options: ResolveModelOptions): Promise<{
+  auth: Awaited<ReturnType<typeof requireStoredAuth>>;
+  model: string;
+}> {
+  const projectDir = options.projectDir ?? process.cwd();
+  const auth = await requireStoredAuth();
+  const client = new ComputeClient({ endpoint: auth.endpoint });
+  const models = await client.listAvailableModels(auth);
+
+  const manifestModel = (await isOgProject(projectDir))
+    ? (await readManifest(projectDir)).defaultModel
+    : undefined;
+
+  const selectedModel = options.explicitModel?.trim() || manifestModel?.trim() || "0g-medium";
+
+  if (!models.some((model) => model.id === selectedModel)) {
+    throw new Error(
+      `Model '${selectedModel}' not found in available models. Run 'og model list' to inspect options.`
+    );
+  }
+
+  return {
+    auth,
+    model: selectedModel
+  };
+}
+
+function printPipelineOverview(input: {
+  mode: "create" | "edit";
+  model: string;
+  template: string;
+  createCount: number;
+  updateCount: number;
+  deleteCount: number;
+  dryRun: boolean;
+  summary: string;
+}): void {
+  const totalFiles = input.createCount + input.updateCount + input.deleteCount;
+  console.log(`Mode: ${input.mode}`);
+  console.log(`Model: ${input.model}`);
+  console.log(`Template: ${input.template}`);
+  console.log(`Summary: ${input.summary}`);
+  console.log(`Files: ${totalFiles} (create: ${input.createCount}, update: ${input.updateCount}, delete: ${input.deleteCount})`);
+  console.log(`Execution: ${input.dryRun ? "dry-run" : "apply"}`);
+}
+
+function isConfirmationAccepted(value: string): boolean {
+  return /^(y|yes)$/i.test(value.trim());
 }
 
 program
@@ -144,6 +204,182 @@ program
         console.log(`Template: ${copiedTemplate.id}`);
         console.log(`Default model: ${defaultModel}`);
         console.log(`Next: cd ${targetDir} && pnpm install`);
+      }
+    )
+  );
+
+program
+  .command("create")
+  .description("Generate project files from prompt with plan/diff/apply workflow")
+  .requiredOption("--prompt <text>", "Prompt describing what to build")
+  .option("--template <id>", `Template id (${SUPPORTED_TEMPLATE_IDS.join(", ")})`)
+  .option("--model <id>", "Model id override")
+  .option("--yes", "Skip confirmation and apply directly", false)
+  .option("--dry-run", "Generate plan and diff without writing files", false)
+  .action(
+    withErrorHandling(
+      async (options: {
+        prompt?: string;
+        template?: string;
+        model?: string;
+        yes?: boolean;
+        dryRun?: boolean;
+      }) => {
+        const prompt = options.prompt?.trim();
+        if (!prompt) {
+          throw new Error("Prompt cannot be empty.");
+        }
+
+        const projectDir = process.cwd();
+
+        const selectedTemplate = (options.template?.trim() || undefined) as
+          | SupportedTemplateId
+          | undefined;
+
+        if (selectedTemplate) {
+          if (!SUPPORTED_TEMPLATE_IDS.includes(selectedTemplate)) {
+            throw new Error(
+              `Unsupported template '${selectedTemplate}'. Supported templates: ${SUPPORTED_TEMPLATE_IDS.join(", ")}.`
+            );
+          }
+
+          await resolveTemplate(selectedTemplate);
+        }
+
+        const { auth, model } = await resolveSelectedModel({
+          explicitModel: options.model,
+          projectDir
+        });
+
+        const provider = new ComputeGenerationProvider({
+          endpoint: auth.endpoint,
+          token: auth.token
+        });
+
+        const pipelineResult = await runCreateEditPipeline({
+          mode: "create",
+          prompt,
+          projectDir,
+          selectedModel: model,
+          templateOverride: selectedTemplate,
+          provider
+        });
+
+        printPipelineOverview({
+          mode: "create",
+          model: pipelineResult.model,
+          template: pipelineResult.template,
+          createCount: pipelineResult.createCount,
+          updateCount: pipelineResult.updateCount,
+          deleteCount: pipelineResult.deleteCount,
+          dryRun: options.dryRun === true,
+          summary: pipelineResult.summary
+        });
+
+        if (pipelineResult.diffText.trim().length > 0) {
+          console.log("\nDiff preview:\n");
+          console.log(pipelineResult.diffText);
+        } else {
+          console.log("\nDiff preview: no file content changes detected.");
+        }
+
+        if (options.dryRun) {
+          console.log("Dry-run mode: no files written.");
+          return;
+        }
+
+        let shouldApply = options.yes === true;
+        if (!shouldApply) {
+          const confirmation = await promptValue("Apply these changes? (y/N): ");
+          shouldApply = isConfirmationAccepted(confirmation);
+        }
+
+        if (!shouldApply) {
+          console.log("Confirmation: rejected. No files written.");
+          return;
+        }
+
+        await applyPipelineResult(pipelineResult, { projectDir });
+        console.log("Confirmation: accepted. Changes applied.");
+      }
+    )
+  );
+
+program
+  .command("edit")
+  .description("Edit existing project files from prompt with plan/diff/apply workflow")
+  .requiredOption("--prompt <text>", "Prompt describing requested edits")
+  .option("--model <id>", "Model id override")
+  .option("--yes", "Skip confirmation and apply directly", false)
+  .option("--dry-run", "Generate plan and diff without writing files", false)
+  .action(
+    withErrorHandling(
+      async (options: { prompt?: string; model?: string; yes?: boolean; dryRun?: boolean }) => {
+        const prompt = options.prompt?.trim();
+        if (!prompt) {
+          throw new Error("Prompt cannot be empty.");
+        }
+
+        const projectDir = process.cwd();
+
+        if (!(await isOgProject(projectDir))) {
+          throw new Error("`og edit` requires an initialized og project. Run `og init` first.");
+        }
+
+        const { auth, model } = await resolveSelectedModel({
+          explicitModel: options.model,
+          projectDir
+        });
+
+        const provider = new ComputeGenerationProvider({
+          endpoint: auth.endpoint,
+          token: auth.token
+        });
+
+        const pipelineResult = await runCreateEditPipeline({
+          mode: "edit",
+          prompt,
+          projectDir,
+          selectedModel: model,
+          provider
+        });
+
+        printPipelineOverview({
+          mode: "edit",
+          model: pipelineResult.model,
+          template: pipelineResult.template,
+          createCount: pipelineResult.createCount,
+          updateCount: pipelineResult.updateCount,
+          deleteCount: pipelineResult.deleteCount,
+          dryRun: options.dryRun === true,
+          summary: pipelineResult.summary
+        });
+
+        if (pipelineResult.diffText.trim().length > 0) {
+          console.log("\nDiff preview:\n");
+          console.log(pipelineResult.diffText);
+        } else {
+          console.log("\nDiff preview: no file content changes detected.");
+        }
+
+        if (options.dryRun) {
+          console.log("Dry-run mode: no files written.");
+          return;
+        }
+
+        let shouldApply = options.yes === true;
+        if (!shouldApply) {
+          const confirmation = await promptValue("Apply these changes? (y/N): ");
+          shouldApply = isConfirmationAccepted(confirmation);
+        }
+
+        if (!shouldApply) {
+          console.log("Confirmation: rejected. No files written.");
+          return;
+        }
+
+        await applyPipelineResult(pipelineResult, { projectDir });
+        console.log("Confirmation: accepted. Changes applied.");
       }
     )
   );
