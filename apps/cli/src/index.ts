@@ -24,6 +24,12 @@ import {
   applyPipelineResult,
   runCreateEditPipeline
 } from "./create-edit-pipeline.js";
+import {
+  formatPreviewCommand,
+  resolvePreviewConfig,
+  resolvePreviewProjectRoot,
+  runPreview
+} from "./preview-runner.js";
 
 const program = new Command();
 
@@ -133,6 +139,19 @@ function printPipelineOverview(input: {
 
 function isConfirmationAccepted(value: string): boolean {
   return /^(y|yes)$/i.test(value.trim());
+}
+
+function parsePort(rawPort: string | undefined): number | undefined {
+  if (!rawPort) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(rawPort, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`Invalid port '${rawPort}'. Port must be an integer between 1 and 65535.`);
+  }
+
+  return parsed;
 }
 
 program
@@ -382,6 +401,49 @@ program
         console.log("Confirmation: accepted. Changes applied.");
       }
     )
+  );
+
+program
+  .command("preview")
+  .description("Run local template-aware preview server for current og project")
+  .option("--port <number>", "Override preview port")
+  .option("--open", "Open preview URL in browser when possible", false)
+  .action(
+    withErrorHandling(async (options: { port?: string; open?: boolean }) => {
+      const projectRoot = await resolvePreviewProjectRoot(process.cwd());
+
+      if (!projectRoot) {
+        throw new Error(
+          "No initialized og project found from current directory upward. Run `og init` first."
+        );
+      }
+
+      if (!(await isOgProject(projectRoot))) {
+        throw new Error("Current project is missing .og/manifest.json. Run `og init` first.");
+      }
+
+      const manifest = await readManifest(projectRoot);
+      const port = parsePort(options.port);
+
+      const previewConfig = await resolvePreviewConfig(projectRoot, manifest, { port });
+
+      console.log(`Project path: ${projectRoot}`);
+      console.log(`Detected template: ${previewConfig.template}`);
+      console.log(`Command: ${formatPreviewCommand(previewConfig)}`);
+      if (previewConfig.url) {
+        console.log(`Preview URL: ${previewConfig.url}`);
+      }
+
+      if (options.open) {
+        if (previewConfig.url) {
+          console.log(`Open mode: enabled (attempting to open ${previewConfig.url})`);
+        } else {
+          console.log("Open mode: enabled (preview URL is unknown, skipping browser open)");
+        }
+      }
+
+      await runPreview(previewConfig, { open: options.open });
+    })
   );
 
 program
