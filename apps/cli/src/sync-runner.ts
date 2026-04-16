@@ -15,7 +15,8 @@ import {
   type SyncHistoryEntry,
   type SyncPayload,
   type SyncProvider,
-  type SyncProviderInfo
+  type SyncProviderInfo,
+  validateSyncPayload
 } from "@og/storage";
 import {
   OG_PROJECT_MANIFEST_MISSING_MESSAGE,
@@ -246,72 +247,6 @@ function createSyncProvider(customProvider?: SyncProvider): SyncProvider {
   return customProvider ?? createLocalFileSyncProvider();
 }
 
-function validateRemotePayload(input: SyncPayload): SyncPayload {
-  if (!input || typeof input !== "object") {
-    throw new Error("Remote sync payload is invalid.");
-  }
-
-  if (!Array.isArray(input.historyEntries)) {
-    throw new Error("Remote sync payload is invalid: historyEntries must be an array.");
-  }
-
-  if (!Array.isArray(input.artifacts)) {
-    throw new Error("Remote sync payload is invalid: artifacts must be an array.");
-  }
-
-  if (typeof input.syncedAt !== "string" || !input.syncedAt.trim()) {
-    throw new Error("Remote sync payload is invalid: syncedAt is missing.");
-  }
-
-  for (const [index, entry] of input.historyEntries.entries()) {
-    if (!entry || typeof entry !== "object") {
-      throw new Error(`Remote sync payload is invalid: historyEntries[${index}] must be an object.`);
-    }
-
-    if (typeof entry.type !== "string" || !entry.type.trim()) {
-      throw new Error(`Remote sync payload is invalid: historyEntries[${index}].type is required.`);
-    }
-
-    if (typeof entry.timestamp !== "string" || !entry.timestamp.trim()) {
-      throw new Error(`Remote sync payload is invalid: historyEntries[${index}].timestamp is required.`);
-    }
-  }
-
-  for (const [index, artifact] of input.artifacts.entries()) {
-    if (!artifact || typeof artifact !== "object") {
-      throw new Error(`Remote sync payload is invalid: artifacts[${index}] must be an object.`);
-    }
-
-    if (typeof artifact.path !== "string" || !artifact.path.trim()) {
-      throw new Error(`Remote sync payload is invalid: artifacts[${index}].path is required.`);
-    }
-
-    const normalizedPath = artifact.path.replace(/\\/g, "/");
-    if (
-      normalizedPath.startsWith("/") ||
-      normalizedPath.startsWith("../") ||
-      normalizedPath.includes("/../")
-    ) {
-      throw new Error(`Remote sync payload is invalid: artifacts[${index}].path escapes project scope.`);
-    }
-
-    if (typeof artifact.size !== "number" || !Number.isFinite(artifact.size) || artifact.size < 0) {
-      throw new Error(`Remote sync payload is invalid: artifacts[${index}].size must be a non-negative number.`);
-    }
-
-    if (typeof artifact.modifiedAt !== "string" || !artifact.modifiedAt.trim()) {
-      throw new Error(`Remote sync payload is invalid: artifacts[${index}].modifiedAt is required.`);
-    }
-  }
-
-  const manifest = validateManifest(input.manifest);
-
-  return {
-    ...input,
-    manifest
-  };
-}
-
 function getArtifactMetaPath(projectDir: string): string {
   return path.join(getOgDirPath(projectDir), ARTIFACT_META_FILE_NAME);
 }
@@ -351,15 +286,16 @@ export async function pullSyncPayload(
     throw new Error("No remote sync payload found for this project.");
   }
 
-  const validatedPayload = validateRemotePayload(remotePayload);
+  const validatedPayload = validateSyncPayload(remotePayload);
+  const validatedManifest = validateManifest(validatedPayload.manifest);
 
   const manifestPath = getManifestPath(projectDir);
   const historyPath = getHistoryPath(projectDir);
   const artifactMetaPath = getArtifactMetaPath(projectDir);
 
-  const manifestChanged = JSON.stringify(localManifest) !== JSON.stringify(validatedPayload.manifest);
+  const manifestChanged = JSON.stringify(localManifest) !== JSON.stringify(validatedManifest);
   if (manifestChanged) {
-    await writeFile(manifestPath, `${JSON.stringify(validatedPayload.manifest, null, 2)}\n`, "utf8");
+    await writeFile(manifestPath, `${JSON.stringify(validatedManifest, null, 2)}\n`, "utf8");
   }
 
   const localHistoryEntries = await readHistoryEntries(projectDir);

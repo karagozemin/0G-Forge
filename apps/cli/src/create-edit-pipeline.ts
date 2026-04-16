@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createManifest, isOgProject, readManifest } from "@og/core";
+import { MOCK_COMPUTE_ENDPOINT } from "@og/compute-client";
 import { DEFAULT_TEMPLATE_ID } from "./template-utils.js";
 import { createUnifiedDiff } from "./diff-utils.js";
 
@@ -18,6 +19,8 @@ const SKIPPED_DIRS = new Set([
 const MAX_FILE_BYTES = 120_000;
 const MAX_CONTEXT_FILES = 80;
 const DEFAULT_FALLBACK_MODEL = "0g-medium";
+const DEFAULT_GENERATION_TIMEOUT_MS = 45_000;
+const GENERATION_ENDPOINT_PATHS = ["/v1/generate-plan", "/v1/generation/plan"] as const;
 
 export type PipelineMode = "create" | "edit";
 export type PlannedFileAction = "create" | "update" | "delete";
@@ -336,43 +339,134 @@ function isHttpEndpoint(endpoint: string): boolean {
   return endpoint.startsWith("http://") || endpoint.startsWith("https://");
 }
 
+function isMockEndpoint(endpoint: string): boolean {
+  return endpoint.startsWith("mock://");
+}
+
+function parseProviderErrorMessage(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+
+  const record = payload as Record<string, unknown>;
+  if (typeof record.message === "string" && record.message.trim()) {
+    return record.message.trim();
+  }
+
+  if (typeof record.error === "string" && record.error.trim()) {
+    return record.error.trim();
+  }
+
+  const nestedError = record.error;
+  if (nestedError && typeof nestedError === "object") {
+    const nestedRecord = nestedError as Record<string, unknown>;
+    if (typeof nestedRecord.message === "string" && nestedRecord.message.trim()) {
+      return nestedRecord.message.trim();
+    }
+  }
+
+  return undefined;
+}
+
 export class ComputeGenerationProvider implements GenerationProvider {
   constructor(
     private readonly options: {
       endpoint: string;
       token: string;
       fetchImpl?: typeof fetch;
+      requestTimeoutMs?: number;
     }
   ) {}
 
   async generatePlan(request: GenerationRequest): Promise<unknown> {
-    if (!isHttpEndpoint(this.options.endpoint)) {
+    const endpoint = this.options.endpoint.trim().replace(/\/+$/, "");
+
+    if (isMockEndpoint(endpoint)) {
       return createMockPlan(request);
     }
 
-    const fetchImpl = this.options.fetchImpl ?? fetch;
-    const response = await fetchImpl(`${this.options.endpoint}/v1/generate-plan`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.options.token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify({
-        mode: request.mode,
-        prompt: request.prompt,
-        model: request.model,
-        template: request.template,
-        projectName: request.projectName,
-        files: request.existingFiles
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Generation request failed with status ${response.status}.`);
+    if (!isHttpEndpoint(endpoint)) {
+      throw new Error(
+        `Unsupported compute endpoint '${endpoint}'. Use an http(s) endpoint for real generation or '${MOCK_COMPUTE_ENDPOINT}' for mock mode.`
+      );
     }
 
-    return (await response.json()) as unknown;
+    const fetchImpl = this.options.fetchImpl ?? fetch;
+    const requestTimeoutMs = this.options.requestTimeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS;
+    const payload = {
+      mode: request.mode,
+      prompt: request.prompt,
+      model: request.model,
+      template: request.template,
+      projectName: request.projectName,
+      files: request.existingFiles
+    };
+
+    let lastError: Error | undefined;
+    for (const routePath of GENERATION_ENDPOINT_PATHS) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+
+      try {
+        const response = await fetchImpl(`${endpoint}${routePath}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.options.token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        const rawBody = await response.text();
+        const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            lastError = new Error(`Generation route not found at ${routePath}.`);
+            continue;
+          }
+
+          const providerMessage = parseProviderErrorMessage(parsedBody);
+          if (response.status === 401) {
+            throw new Error(
+              providerMessage || "Generation request unauthorized. Re-run `og login` with valid credentials."
+            );
+          }
+
+          if (response.status === 403) {
+            throw new Error(
+              providerMessage || `Generation forbidden for model '${request.model}'. Verify account/model permissions.`
+            );
+          }
+
+          throw new Error(providerMessage || `Generation request failed with status ${response.status}.`);
+        }
+
+        if (!rawBody.trim()) {
+          throw new Error("Generation provider returned an empty response body.");
+        }
+
+        return parsedBody;
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error(`Generation request timed out after ${requestTimeoutMs}ms.`);
+        }
+
+        if (error instanceof Error) {
+          lastError = error;
+        } else {
+          lastError = new Error(String(error));
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    throw new Error(
+      `Generation request failed across provider routes: ${GENERATION_ENDPOINT_PATHS.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""}`.trim()
+    );
   }
 }
 
@@ -412,16 +506,28 @@ export async function runCreateEditPipeline(options: PipelineRunOptions): Promis
 
   const existingFiles = await collectProjectFiles(projectDir);
 
-  const providerResult = await options.provider.generatePlan({
-    mode: options.mode,
-    prompt: options.prompt,
-    template,
-    model,
-    projectName,
-    existingFiles
-  });
+  let providerResult: unknown;
+  try {
+    providerResult = await options.provider.generatePlan({
+      mode: options.mode,
+      prompt: options.prompt,
+      template,
+      model,
+      projectName,
+      existingFiles
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Generation provider request failed: ${message}`);
+  }
 
-  const structuredPlan = validateStructuredPatchPlan(providerResult);
+  let structuredPlan: StructuredPatchPlan;
+  try {
+    structuredPlan = validateStructuredPatchPlan(providerResult);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Generation provider returned invalid structured response: ${message}`);
+  }
 
   const changes: PipelineChange[] = [];
   for (const planned of structuredPlan.files) {

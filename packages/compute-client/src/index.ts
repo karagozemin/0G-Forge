@@ -13,7 +13,9 @@ export {
 
 export {
 	DEFAULT_COMPUTE_ENDPOINT,
+	MOCK_COMPUTE_ENDPOINT,
 	ComputeClient,
+	ComputeProviderError,
 	type ComputeIdentity,
 	type ComputeModel
 } from "./compute-client.js";
