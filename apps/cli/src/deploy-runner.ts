@@ -2,6 +2,11 @@ import { access, readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { OgManifest } from "@og/core";
+import {
+  ensureCommandAvailable,
+  ensureFileExists,
+  formatCommand
+} from "./runtime-utils.js";
 
 export const SUPPORTED_DEPLOY_TEMPLATES = [
   "react-vite",
@@ -35,26 +40,6 @@ async function pathExists(absolutePath: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function ensureFileExists(absolutePath: string, label: string): Promise<void> {
-  if (!(await pathExists(absolutePath))) {
-    throw new Error(`Missing ${label}: ${absolutePath}`);
-  }
-}
-
-async function ensureCommandAvailable(command: string, installHint: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, ["--version"], { stdio: "ignore" });
-
-    child.once("error", () => {
-      reject(new Error(`${command} is not available. ${installHint}`));
-    });
-
-    child.once("exit", () => {
-      resolve();
-    });
-  });
 }
 
 async function ensureVercelAuth(command: string): Promise<void> {
@@ -114,36 +99,6 @@ async function validateTemplateDeployPrerequisites(
 
   if (!(await pathExists(path.join(projectDir, "node_modules")))) {
     throw new Error("Missing node_modules. Run `pnpm install` before deploying this template.");
-  }
-}
-
-function formatCommand(command: string, args: string[]): string {
-  return [command, ...args]
-    .map((part) => {
-      if (/^[a-zA-Z0-9_./:-]+$/.test(part)) {
-        return part;
-      }
-
-      return JSON.stringify(part);
-    })
-    .join(" ");
-}
-
-export async function resolveDeployProjectRoot(startDir: string): Promise<string | null> {
-  let current = path.resolve(startDir);
-
-  while (true) {
-    const manifestPath = path.join(current, ".og", "manifest.json");
-    if (await pathExists(manifestPath)) {
-      return current;
-    }
-
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-
-    current = parent;
   }
 }
 

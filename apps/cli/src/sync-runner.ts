@@ -1,4 +1,4 @@
-import { access, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   type OgManifest,
@@ -17,6 +17,12 @@ import {
   type SyncProvider,
   type SyncProviderInfo
 } from "@og/storage";
+import {
+  OG_PROJECT_MANIFEST_MISSING_MESSAGE,
+  OG_PROJECT_NOT_FOUND_MESSAGE,
+  pathExists,
+  resolveOgProjectRoot
+} from "./runtime-utils.js";
 
 const SKIPPED_ARTIFACT_DIRS = new Set([
   ".git",
@@ -56,45 +62,18 @@ export type PullSyncResult = {
   payloadSyncedAt: string;
 };
 
-async function pathExists(absolutePath: string): Promise<boolean> {
-  try {
-    await access(absolutePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function resolveProjectKey(manifest: OgManifest): string {
   return `project:${manifest.projectName}:${manifest.template}:${manifest.deployTarget}`;
 }
 
-export async function resolveSyncProjectRoot(startDir: string): Promise<string | null> {
-  let current = path.resolve(startDir);
-
-  while (true) {
-    const manifestPath = path.join(current, ".og", "manifest.json");
-    if (await pathExists(manifestPath)) {
-      return current;
-    }
-
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-
-    current = parent;
-  }
-}
-
 export async function resolveSyncProject(startDir: string): Promise<ResolvedSyncProject> {
-  const projectDir = await resolveSyncProjectRoot(startDir);
+  const projectDir = await resolveOgProjectRoot(startDir);
   if (!projectDir) {
-    throw new Error("No initialized og project found from current directory upward. Run `og init` first.");
+    throw new Error(OG_PROJECT_NOT_FOUND_MESSAGE);
   }
 
   if (!(await isOgProject(projectDir))) {
-    throw new Error("Current project is missing .og/manifest.json. Run `og init` first.");
+    throw new Error(OG_PROJECT_MANIFEST_MISSING_MESSAGE);
   }
 
   const manifest = await readManifest(projectDir);
@@ -282,6 +261,47 @@ function validateRemotePayload(input: SyncPayload): SyncPayload {
 
   if (typeof input.syncedAt !== "string" || !input.syncedAt.trim()) {
     throw new Error("Remote sync payload is invalid: syncedAt is missing.");
+  }
+
+  for (const [index, entry] of input.historyEntries.entries()) {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`Remote sync payload is invalid: historyEntries[${index}] must be an object.`);
+    }
+
+    if (typeof entry.type !== "string" || !entry.type.trim()) {
+      throw new Error(`Remote sync payload is invalid: historyEntries[${index}].type is required.`);
+    }
+
+    if (typeof entry.timestamp !== "string" || !entry.timestamp.trim()) {
+      throw new Error(`Remote sync payload is invalid: historyEntries[${index}].timestamp is required.`);
+    }
+  }
+
+  for (const [index, artifact] of input.artifacts.entries()) {
+    if (!artifact || typeof artifact !== "object") {
+      throw new Error(`Remote sync payload is invalid: artifacts[${index}] must be an object.`);
+    }
+
+    if (typeof artifact.path !== "string" || !artifact.path.trim()) {
+      throw new Error(`Remote sync payload is invalid: artifacts[${index}].path is required.`);
+    }
+
+    const normalizedPath = artifact.path.replace(/\\/g, "/");
+    if (
+      normalizedPath.startsWith("/") ||
+      normalizedPath.startsWith("../") ||
+      normalizedPath.includes("/../")
+    ) {
+      throw new Error(`Remote sync payload is invalid: artifacts[${index}].path escapes project scope.`);
+    }
+
+    if (typeof artifact.size !== "number" || !Number.isFinite(artifact.size) || artifact.size < 0) {
+      throw new Error(`Remote sync payload is invalid: artifacts[${index}].size must be a non-negative number.`);
+    }
+
+    if (typeof artifact.modifiedAt !== "string" || !artifact.modifiedAt.trim()) {
+      throw new Error(`Remote sync payload is invalid: artifacts[${index}].modifiedAt is required.`);
+    }
   }
 
   const manifest = validateManifest(input.manifest);

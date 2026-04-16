@@ -98,8 +98,16 @@ function normalizeRelativePath(rawPath: string): string {
     throw new Error("Generated file path cannot be empty.");
   }
 
+  if (normalizedSlashes.includes("\0")) {
+    throw new Error("Generated file path cannot contain NUL bytes.");
+  }
+
   if (normalizedSlashes.startsWith("/")) {
     throw new Error(`Generated file path must be relative: '${rawPath}'.`);
+  }
+
+  if (/^[A-Za-z]:/.test(normalizedSlashes)) {
+    throw new Error(`Generated file path must not include a drive prefix: '${rawPath}'.`);
   }
 
   const normalized = path.posix.normalize(normalizedSlashes);
@@ -112,7 +120,8 @@ function normalizeRelativePath(rawPath: string): string {
     throw new Error(`Generated file path escapes project directory: '${rawPath}'.`);
   }
 
-  if (normalized === ".og" || normalized.startsWith(".og/")) {
+  const firstSegment = normalized.split("/")[0]?.toLowerCase();
+  if (firstSegment === ".og") {
     throw new Error("Generated file path cannot target .og internal state.");
   }
 

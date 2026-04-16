@@ -2,10 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo"
   },
   "include": ["src/**/*.ts"]
 }

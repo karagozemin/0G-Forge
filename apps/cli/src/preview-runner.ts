@@ -1,7 +1,8 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { OgManifest } from "@og/core";
+import { ensureCommandAvailable, ensureFileExists, formatCommand } from "./runtime-utils.js";
 
 export const SUPPORTED_PREVIEW_TEMPLATES = [
   "react-vite",
@@ -33,35 +34,6 @@ type PackageJsonLike = {
 
 function isSupportedTemplate(value: string): value is SupportedPreviewTemplate {
   return SUPPORTED_PREVIEW_TEMPLATES.includes(value as SupportedPreviewTemplate);
-}
-
-async function pathExists(absolutePath: string): Promise<boolean> {
-  try {
-    await access(absolutePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function ensureFileExists(absolutePath: string, label: string): Promise<void> {
-  if (!(await pathExists(absolutePath))) {
-    throw new Error(`Missing ${label}: ${absolutePath}`);
-  }
-}
-
-async function ensureCommandAvailable(command: string, installHint: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, ["--version"], { stdio: "ignore" });
-
-    child.once("error", () => {
-      reject(new Error(`${command} is not available. ${installHint}`));
-    });
-
-    child.once("exit", () => {
-      resolve();
-    });
-  });
 }
 
 async function resolveProjectPackageScripts(projectDir: string): Promise<Record<string, string>> {
@@ -110,18 +82,6 @@ async function resolveStaticPreviewCommand(): Promise<string> {
   );
 }
 
-function formatCommand(command: string, args: string[]): string {
-  return [command, ...args]
-    .map((part) => {
-      if (/^[a-zA-Z0-9_./:-]+$/.test(part)) {
-        return part;
-      }
-
-      return JSON.stringify(part);
-    })
-    .join(" ");
-}
-
 async function openBrowser(url: string): Promise<void> {
   const platform = process.platform;
 
@@ -144,24 +104,6 @@ async function openBrowser(url: string): Promise<void> {
   }
 
   throw new Error(`Automatic browser open is not supported on platform: ${platform}`);
-}
-
-export async function resolvePreviewProjectRoot(startDir: string): Promise<string | null> {
-  let current = path.resolve(startDir);
-
-  while (true) {
-    const manifestPath = path.join(current, ".og", "manifest.json");
-    if (await pathExists(manifestPath)) {
-      return current;
-    }
-
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-
-    current = parent;
-  }
 }
 
 export async function resolvePreviewConfig(

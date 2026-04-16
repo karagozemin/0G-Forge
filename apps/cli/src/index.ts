@@ -27,13 +27,11 @@ import {
 import {
   formatPreviewCommand,
   resolvePreviewConfig,
-  resolvePreviewProjectRoot,
   runPreview
 } from "./preview-runner.js";
 import {
   formatDeployCommand,
   resolveDeployConfig,
-  resolveDeployProjectRoot,
   runVercelDeploy
 } from "./deploy-runner.js";
 import {
@@ -41,6 +39,11 @@ import {
   pushSyncPayload,
   resolveSyncProject
 } from "./sync-runner.js";
+import {
+  OG_PROJECT_MANIFEST_MISSING_MESSAGE,
+  OG_PROJECT_NOT_FOUND_MESSAGE,
+  resolveOgProjectRoot
+} from "./runtime-utils.js";
 
 const program = new Command();
 
@@ -421,16 +424,14 @@ program
   .option("--open", "Open preview URL in browser when possible", false)
   .action(
     withErrorHandling(async (options: { port?: string; open?: boolean }) => {
-      const projectRoot = await resolvePreviewProjectRoot(process.cwd());
+      const projectRoot = await resolveOgProjectRoot(process.cwd());
 
       if (!projectRoot) {
-        throw new Error(
-          "No initialized og project found from current directory upward. Run `og init` first."
-        );
+        throw new Error(OG_PROJECT_NOT_FOUND_MESSAGE);
       }
 
       if (!(await isOgProject(projectRoot))) {
-        throw new Error("Current project is missing .og/manifest.json. Run `og init` first.");
+        throw new Error(OG_PROJECT_MANIFEST_MISSING_MESSAGE);
       }
 
       const manifest = await readManifest(projectRoot);
@@ -466,15 +467,13 @@ deployCommand
   .option("--yes", "Run non-interactive deploy where supported", false)
   .action(
     withErrorHandling(async (options: { prod?: boolean; yes?: boolean }) => {
-      const projectRoot = await resolveDeployProjectRoot(process.cwd());
+      const projectRoot = await resolveOgProjectRoot(process.cwd());
       if (!projectRoot) {
-        throw new Error(
-          "No initialized og project found from current directory upward. Run `og init` first."
-        );
+        throw new Error(OG_PROJECT_NOT_FOUND_MESSAGE);
       }
 
       if (!(await isOgProject(projectRoot))) {
-        throw new Error("Current project is missing .og/manifest.json. Run `og init` first.");
+        throw new Error(OG_PROJECT_MANIFEST_MISSING_MESSAGE);
       }
 
       const manifest = await readManifest(projectRoot);
