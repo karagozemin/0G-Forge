@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import { mkdir, readdir } from "node:fs/promises";
+import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { Command } from "commander";
-import { isOgProject, readManifest, updateManifest } from "@og/core";
+import { createManifest, isOgProject, readManifest, updateManifest } from "@og/core";
 import {
   ComputeClient,
   DEFAULT_COMPUTE_ENDPOINT,
@@ -10,6 +12,13 @@ import {
   readAuth,
   saveAuth
 } from "@og/compute-client";
+import {
+  DEFAULT_TEMPLATE_ID,
+  SUPPORTED_TEMPLATE_IDS,
+  copyTemplateToDirectory,
+  resolveTemplate,
+  type SupportedTemplateId
+} from "./template-utils.js";
 
 const program = new Command();
 
@@ -47,6 +56,25 @@ async function requireStoredAuth() {
   return auth;
 }
 
+async function resolveInitDefaultModel(explicitModel?: string): Promise<string> {
+  if (explicitModel?.trim()) {
+    return explicitModel.trim();
+  }
+
+  if (await isOgProject(process.cwd())) {
+    try {
+      const currentManifest = await readManifest(process.cwd());
+      if (currentManifest.defaultModel.trim()) {
+        return currentManifest.defaultModel;
+      }
+    } catch {
+      return "0g-medium";
+    }
+  }
+
+  return "0g-medium";
+}
+
 program
   .name("og")
   .description("Terminal-native companion for 0G App")
@@ -58,6 +86,67 @@ program
   .action(() => {
     console.log("CLI bootstrapped.");
   });
+
+program
+  .command("init")
+  .description("Initialize a new local og project from template")
+  .option("--template <id>", `Template id (${SUPPORTED_TEMPLATE_IDS.join(", ")})`)
+  .option("--dir <path>", "Target directory", ".")
+  .option("--model <id>", "Default model for project manifest")
+  .option("--yes", "Allow writing into a non-empty target directory", false)
+  .action(
+    withErrorHandling(
+      async (options: { template?: string; dir?: string; model?: string; yes?: boolean }) => {
+        const targetDir = path.resolve(options.dir?.trim() || ".");
+        await mkdir(targetDir, { recursive: true });
+
+        if (await isOgProject(targetDir)) {
+          throw new Error("Target directory is already an initialized og project.");
+        }
+
+        const entries = await readdir(targetDir);
+        if (entries.length > 0 && !options.yes) {
+          throw new Error(
+            "Target directory is not empty. Re-run with --yes to allow writing into it."
+          );
+        }
+
+        const selectedTemplateId = (options.template?.trim() ||
+          DEFAULT_TEMPLATE_ID) as SupportedTemplateId;
+
+        if (!options.template) {
+          console.log(`No template specified. Using default template: ${DEFAULT_TEMPLATE_ID}`);
+        }
+
+        await resolveTemplate(selectedTemplateId);
+        const copiedTemplate = await copyTemplateToDirectory(selectedTemplateId, targetDir);
+
+        const projectName = path.basename(targetDir);
+        if (!projectName) {
+          throw new Error("Could not derive project name from target directory.");
+        }
+
+        const defaultModel = await resolveInitDefaultModel(options.model);
+
+        await createManifest(
+          {
+            projectName,
+            template: copiedTemplate.id,
+            defaultModel,
+            deployTarget: "vercel",
+            syncEnabled: false
+          },
+          targetDir
+        );
+
+        console.log("Initialized og project successfully.");
+        console.log(`Path: ${targetDir}`);
+        console.log(`Template: ${copiedTemplate.id}`);
+        console.log(`Default model: ${defaultModel}`);
+        console.log(`Next: cd ${targetDir} && pnpm install`);
+      }
+    )
+  );
 
 program
   .command("login")
