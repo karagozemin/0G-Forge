@@ -1,6 +1,6 @@
+import { existsSync } from "node:fs";
 import { access, cp, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 export const SUPPORTED_TEMPLATE_IDS = ["react-vite", "nextjs-app", "static-landing"] as const;
 export type SupportedTemplateId = (typeof SUPPORTED_TEMPLATE_IDS)[number];
@@ -24,8 +24,34 @@ export type ResolvedTemplate = {
 };
 
 function getWorkspaceRoot(): string {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(moduleDir, "../../..");
+  const candidateRoots: string[] = [];
+
+  if (typeof __dirname === "string" && __dirname.length > 0) {
+    candidateRoots.push(path.resolve(__dirname, "../../.."));
+  }
+
+  const entryScriptPath = process.argv[1];
+  if (entryScriptPath) {
+    candidateRoots.push(path.resolve(path.dirname(path.resolve(entryScriptPath)), "../../.."));
+  }
+
+  candidateRoots.push(process.cwd());
+
+  const checkedRoots = new Set<string>();
+  for (const candidateRoot of candidateRoots) {
+    if (checkedRoots.has(candidateRoot)) {
+      continue;
+    }
+
+    checkedRoots.add(candidateRoot);
+
+    const catalogPath = path.join(candidateRoot, "templates", "catalog.json");
+    if (existsSync(catalogPath)) {
+      return candidateRoot;
+    }
+  }
+
+  throw new Error("Could not locate workspace templates/catalog.json.");
 }
 
 function getCatalogPath(): string {
