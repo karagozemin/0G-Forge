@@ -1,0 +1,19 @@
+{
+  "templates": [
+    {
+      "id": "react-vite",
+      "path": "templates/react-vite/template",
+      "description": "React + Vite single-page app"
+    },
+    {
+      "id": "nextjs-app",
+      "path": "templates/nextjs-app/template",
+      "description": "Next.js App Router frontend"
+    },
+    {
+      "id": "static-landing",
+      "path": "templates/static-landing/template",
+      "description": "Simple static landing page"
+    }
+  ]
+}

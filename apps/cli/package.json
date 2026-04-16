@@ -1,0 +1,28 @@
+{
+  "name": "@og/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "og": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm,cjs --dts --out-dir dist",
+    "lint": "echo \"lint config will be added in step 2\"",
+    "test": "echo \"no tests yet\""
+  },
+  "dependencies": {
+    "@og/compute-client": "workspace:*",
+    "@og/core": "workspace:*",
+    "@og/deploy-vercel": "workspace:*",
+    "@og/storage": "workspace:*",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.2.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
