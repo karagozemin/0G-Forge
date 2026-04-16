@@ -36,6 +36,11 @@ import {
   resolveDeployProjectRoot,
   runVercelDeploy
 } from "./deploy-runner.js";
+import {
+  pullSyncPayload,
+  pushSyncPayload,
+  resolveSyncProject
+} from "./sync-runner.js";
 
 const program = new Command();
 
@@ -497,6 +502,44 @@ deployCommand
           console.log(result.rawOutput.trim());
         }
       }
+    })
+  );
+
+const syncCommand = program.command("sync").description("Sync local og metadata state");
+
+syncCommand
+  .command("push")
+  .description("Push local .og metadata and lightweight artifacts to sync provider")
+  .action(
+    withErrorHandling(async () => {
+      const resolved = await resolveSyncProject(process.cwd());
+      const result = await pushSyncPayload(resolved.projectDir);
+
+      console.log(`Project path: ${result.projectPath}`);
+      console.log(`Sync provider: ${result.providerInfo.name}`);
+      console.log(`Sync target: ${result.providerInfo.storagePath}`);
+      console.log(`History entries synced: ${result.historyCount}`);
+      console.log(`Artifacts included: ${result.artifactCount}`);
+      console.log(`Manifest synced: yes`);
+      console.log(`Synced at: ${result.payload.syncedAt}`);
+    })
+  );
+
+syncCommand
+  .command("pull")
+  .description("Pull latest .og metadata state from sync provider")
+  .action(
+    withErrorHandling(async () => {
+      const resolved = await resolveSyncProject(process.cwd());
+      const result = await pullSyncPayload(resolved.projectDir);
+
+      console.log(`Project path: ${result.projectPath}`);
+      console.log(`Sync provider: ${result.providerInfo.name}`);
+      console.log(`Sync target: ${result.providerInfo.storagePath}`);
+      console.log(`History entries synced: ${result.historyCount}`);
+      console.log(`Artifacts included: ${result.artifactCount}`);
+      console.log(`Manifest changed: ${result.manifestChanged ? "yes" : "no"}`);
+      console.log(`Remote payload syncedAt: ${result.payloadSyncedAt}`);
     })
   );
 
