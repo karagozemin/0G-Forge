@@ -10,7 +10,7 @@ export type ComputeIdentity = {
   accountId: string;
   endpoint: string;
   tokenPreview: string;
-  validationMode: "local" | "remote";
+  validationMode: "local" | "remote" | "proxy";
 };
 
 export type ComputeModel = {
@@ -29,7 +29,8 @@ export class ComputeProviderError extends Error {
       | "unauthorized"
       | "forbidden"
       | "not-found"
-      | "invalid-response",
+      | "invalid-response"
+      | "capability-not-supported",
     readonly status?: number
   ) {
     super(message);
@@ -41,6 +42,12 @@ const MOCK_MODELS: ComputeModel[] = [
   { id: "0g-large", name: "0G Large", contextWindow: 128000 },
   { id: "0g-medium", name: "0G Medium", contextWindow: 64000 },
   { id: "0g-fast", name: "0G Fast", contextWindow: 16000 }
+];
+
+const PROXY_FALLBACK_MODELS: ComputeModel[] = [
+  { id: "0g-medium", name: "0G Medium (proxy fallback)", contextWindow: 64000 },
+  { id: "0g-large", name: "0G Large (proxy fallback)", contextWindow: 128000 },
+  { id: "0g-fast", name: "0G Fast (proxy fallback)", contextWindow: 16000 }
 ];
 
 type ComputeClientOptions = {
@@ -158,6 +165,14 @@ function parseErrorMessage(payload: unknown): string | undefined {
 function normalizeEndpoint(endpoint: string): string {
   const trimmed = endpoint.trim();
   return isHttpEndpoint(trimmed) ? trimmed.replace(/\/+$/, "") : trimmed;
+}
+
+function pathLooksUnsupported(message: string | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+
+  return /(unsupported endpoint|endpoint not supported|not implemented|not found)/i.test(message);
 }
 
 export class ComputeClient {
@@ -280,6 +295,52 @@ export class ComputeClient {
     }
   }
 
+  private async requestJsonAcrossPaths(
+    endpoint: string,
+    auth: StoredAuth,
+    paths: readonly string[],
+    options: {
+      method?: "GET" | "POST";
+      body?: Record<string, unknown>;
+      operationLabel: string;
+      tolerateUnsupportedEndpoint?: boolean;
+    }
+  ): Promise<unknown> {
+    let lastError: Error | undefined;
+
+    for (const candidatePath of paths) {
+      try {
+        return await this.requestJson(endpoint, auth, candidatePath, {
+          method: options.method,
+          body: options.body,
+          operationLabel: options.operationLabel
+        });
+      } catch (error) {
+        if (!(error instanceof ComputeProviderError)) {
+          throw error;
+        }
+
+        const isRouteMiss = error.code === "not-found";
+        const isUnsupported =
+          options.tolerateUnsupportedEndpoint === true &&
+          error.code === "request-failed" &&
+          pathLooksUnsupported(error.message);
+
+        if (isRouteMiss || isUnsupported) {
+          lastError = error;
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new ComputeProviderError(
+      `${options.operationLabel} is not supported by configured endpoint '${endpoint}'. Tried: ${paths.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""}`.trim(),
+      "capability-not-supported"
+    );
+  }
+
   async validateAuthState(auth: StoredAuth): Promise<ComputeIdentity> {
     if (!auth.token.trim()) {
       throw new Error("Missing auth token. Please run `og login`.");
@@ -297,24 +358,72 @@ export class ComputeClient {
       };
     }
 
-    const data = await this.requestJson(endpoint, auth, "/v1/whoami", {
-      operationLabel: "Auth validation"
-    });
+    try {
+      const whoamiData = await this.requestJsonAcrossPaths(endpoint, auth, ["/whoami", "/v1/whoami"], {
+        operationLabel: "Auth validation",
+        tolerateUnsupportedEndpoint: true
+      });
 
-    const accountId = parseRemoteAccountId(data);
-    if (!accountId) {
-      throw new ComputeProviderError(
-        "Auth validation succeeded but account id could not be parsed from provider response.",
-        "invalid-response"
-      );
+      const accountId = parseRemoteAccountId(whoamiData);
+      if (!accountId) {
+        throw new ComputeProviderError(
+          "Auth validation succeeded but account id could not be parsed from provider response.",
+          "invalid-response"
+        );
+      }
+
+      return {
+        accountId,
+        endpoint,
+        tokenPreview: maskToken(auth.token),
+        validationMode: "remote"
+      };
+    } catch (error) {
+      if (!(error instanceof ComputeProviderError)) {
+        throw error;
+      }
+
+      if (error.code !== "capability-not-supported") {
+        throw error;
+      }
+
+      if (auth.accountId?.trim()) {
+        return {
+          accountId: auth.accountId.trim(),
+          endpoint,
+          tokenPreview: maskToken(auth.token),
+          validationMode: "proxy"
+        };
+      }
+
+      try {
+        await this.requestJsonAcrossPaths(endpoint, auth, ["/models", "/v1/models"], {
+          operationLabel: "Proxy auth probe",
+          tolerateUnsupportedEndpoint: true
+        });
+      } catch (probeError) {
+        if (!(probeError instanceof ComputeProviderError)) {
+          throw probeError;
+        }
+
+        const isCapabilityMiss = probeError.code === "capability-not-supported";
+        const isUnsupportedRequest =
+          probeError.code === "request-failed" && pathLooksUnsupported(probeError.message);
+        const isRateLimitedProbe =
+          probeError.code === "request-failed" && /rate limit exceeded|too many invalid model requests/i.test(probeError.message);
+
+        if (!isCapabilityMiss && !isUnsupportedRequest && !isRateLimitedProbe) {
+          throw probeError;
+        }
+      }
+
+      return {
+        accountId: auth.accountId ?? deriveLocalAccountId(auth.token),
+        endpoint,
+        tokenPreview: maskToken(auth.token),
+        validationMode: "proxy"
+      };
     }
-
-    return {
-      accountId,
-      endpoint,
-      tokenPreview: maskToken(auth.token),
-      validationMode: "remote"
-    };
   }
 
   async listAvailableModels(auth: StoredAuth): Promise<ComputeModel[]> {
@@ -324,19 +433,27 @@ export class ComputeClient {
       return MOCK_MODELS;
     }
 
-    const data = await this.requestJson(identity.endpoint, auth, "/v1/models", {
-      operationLabel: "Model listing"
-    });
+    try {
+      const data = await this.requestJsonAcrossPaths(identity.endpoint, auth, ["/models", "/v1/models"], {
+        operationLabel: "Model listing",
+        tolerateUnsupportedEndpoint: true
+      });
 
-    const models = parseRemoteModels(data);
+      const models = parseRemoteModels(data);
+      if (models.length > 0) {
+        return models;
+      }
 
-    if (models.length === 0) {
       throw new ComputeProviderError(
         "No valid models returned by compute provider.",
         "invalid-response"
       );
-    }
+    } catch (error) {
+      if (error instanceof ComputeProviderError && error.code === "capability-not-supported") {
+        return PROXY_FALLBACK_MODELS;
+      }
 
-    return models;
+      throw error;
+    }
   }
 }

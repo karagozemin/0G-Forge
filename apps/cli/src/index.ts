@@ -121,6 +121,13 @@ async function resolveSelectedModel(options: ResolveModelOptions): Promise<{
   const selectedModel = options.explicitModel?.trim() || manifestModel?.trim() || "0g-medium";
 
   if (!models.some((model) => model.id === selectedModel)) {
+    if (options.explicitModel?.trim()) {
+      return {
+        auth,
+        model: selectedModel
+      };
+    }
+
     throw new Error(
       `Model '${selectedModel}' not found in available models. Run 'og model list' to inspect options.`
     );

@@ -20,7 +20,7 @@ const MAX_FILE_BYTES = 120_000;
 const MAX_CONTEXT_FILES = 80;
 const DEFAULT_FALLBACK_MODEL = "0g-medium";
 const DEFAULT_GENERATION_TIMEOUT_MS = 45_000;
-const GENERATION_ENDPOINT_PATHS = ["/v1/generate-plan", "/v1/generation/plan"] as const;
+const CHAT_COMPLETION_PATHS = ["/chat/completions", "/v1/chat/completions"] as const;
 
 export type PipelineMode = "create" | "edit";
 export type PlannedFileAction = "create" | "update" | "delete";
@@ -368,6 +368,86 @@ function parseProviderErrorMessage(payload: unknown): string | undefined {
   return undefined;
 }
 
+function isUnsupportedRoute(responseStatus: number, providerMessage: string | undefined): boolean {
+  if (responseStatus === 404) {
+    return true;
+  }
+
+  if (!providerMessage) {
+    return false;
+  }
+
+  return /(unsupported endpoint|endpoint not supported|route not found|not implemented)/i.test(providerMessage);
+}
+
+function buildGenerationSystemPrompt(): string {
+  return [
+    "You are a strict code patch planner for a local project.",
+    "Return ONLY valid JSON.",
+    "Response schema:",
+    "{",
+    '  "summary": string,',
+    '  "template": string,',
+    '  "files": [',
+    "    {",
+    '      "path": string,',
+    '      "action": "create" | "update" | "delete",',
+    '      "content"?: string',
+    "    }",
+    "  ]",
+    "}",
+    "Rules:",
+    "- paths must be relative and must not target .og",
+    "- for delete actions omit content",
+    "- for create/update include full file content",
+    "- keep output minimal and deterministic"
+  ].join("\n");
+}
+
+function buildGenerationUserPrompt(request: GenerationRequest): string {
+  const existingFilesPreview = request.existingFiles.slice(0, 80).map((file) => ({
+    path: file.path,
+    content: file.content
+  }));
+
+  return JSON.stringify(
+    {
+      mode: request.mode,
+      prompt: request.prompt,
+      template: request.template,
+      model: request.model,
+      projectName: request.projectName,
+      existingFiles: existingFilesPreview
+    },
+    null,
+    2
+  );
+}
+
+function extractJsonFromCompletion(content: string): unknown {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error("Generation provider returned empty completion content.");
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed;
+
+  try {
+    return JSON.parse(candidate) as unknown;
+  } catch {
+    const firstBrace = candidate.indexOf("{");
+    const lastBrace = candidate.lastIndexOf("}");
+
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      const objectSlice = candidate.slice(firstBrace, lastBrace + 1);
+      return JSON.parse(objectSlice) as unknown;
+    }
+
+    throw new Error("Generation provider completion content is not valid JSON.");
+  }
+}
+
 export class ComputeGenerationProvider implements GenerationProvider {
   constructor(
     private readonly options: {
@@ -394,16 +474,22 @@ export class ComputeGenerationProvider implements GenerationProvider {
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const requestTimeoutMs = this.options.requestTimeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS;
     const payload = {
-      mode: request.mode,
-      prompt: request.prompt,
       model: request.model,
-      template: request.template,
-      projectName: request.projectName,
-      files: request.existingFiles
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: buildGenerationSystemPrompt()
+        },
+        {
+          role: "user",
+          content: buildGenerationUserPrompt(request)
+        }
+      ]
     };
 
     let lastError: Error | undefined;
-    for (const routePath of GENERATION_ENDPOINT_PATHS) {
+    for (const routePath of CHAT_COMPLETION_PATHS) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
@@ -423,12 +509,12 @@ export class ComputeGenerationProvider implements GenerationProvider {
         const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
 
         if (!response.ok) {
-          if (response.status === 404) {
+          const providerMessage = parseProviderErrorMessage(parsedBody);
+          if (isUnsupportedRoute(response.status, providerMessage)) {
             lastError = new Error(`Generation route not found at ${routePath}.`);
             continue;
           }
 
-          const providerMessage = parseProviderErrorMessage(parsedBody);
           if (response.status === 401) {
             throw new Error(
               providerMessage || "Generation request unauthorized. Re-run `og login` with valid credentials."
@@ -444,28 +530,41 @@ export class ComputeGenerationProvider implements GenerationProvider {
           throw new Error(providerMessage || `Generation request failed with status ${response.status}.`);
         }
 
-        if (!rawBody.trim()) {
-          throw new Error("Generation provider returned an empty response body.");
+        if (!rawBody.trim() || !parsedBody || typeof parsedBody !== "object") {
+          throw new Error("Generation provider returned an empty or invalid response body.");
         }
 
-        return parsedBody;
+        const completion = parsedBody as {
+          choices?: Array<{
+            message?: {
+              content?: unknown;
+            };
+            finish_reason?: unknown;
+          }>;
+        };
+
+        const firstChoice = completion.choices?.[0];
+        const content = firstChoice?.message?.content;
+
+        if (typeof content !== "string" || !content.trim()) {
+          throw new Error("Generation provider response did not include completion text content.");
+        }
+
+        return extractJsonFromCompletion(content);
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           throw new Error(`Generation request timed out after ${requestTimeoutMs}ms.`);
         }
 
-        if (error instanceof Error) {
-          lastError = error;
-        } else {
-          lastError = new Error(String(error));
-        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(message);
       } finally {
         clearTimeout(timeoutId);
       }
     }
 
     throw new Error(
-      `Generation request failed across provider routes: ${GENERATION_ENDPOINT_PATHS.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""}`.trim()
+      `Generation request failed across provider routes: ${CHAT_COMPLETION_PATHS.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""}`.trim()
     );
   }
 }
