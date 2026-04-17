@@ -41,8 +41,14 @@ import {
   resolveSyncProject
 } from "./sync-runner.js";
 import {
+  inferNextStepFromError,
   OG_PROJECT_MANIFEST_MISSING_MESSAGE,
   OG_PROJECT_NOT_FOUND_MESSAGE,
+  printField,
+  printNextStep,
+  printSection,
+  printSuccess,
+  printWarning,
   resolveOgProjectRoot
 } from "./runtime-utils.js";
 
@@ -58,7 +64,11 @@ function withErrorHandling<TArgs extends unknown[]>(
       await action(...args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Error: ${message}`);
+      console.error(`✖ ${message}`);
+      const nextStep = inferNextStepFromError(message);
+      if (nextStep) {
+        printNextStep(nextStep);
+      }
       process.exitCode = 1;
     }
   };
@@ -188,12 +198,15 @@ function printPipelineOverview(input: {
   summary: string;
 }): void {
   const totalFiles = input.createCount + input.updateCount + input.deleteCount;
-  console.log(`Mode: ${input.mode}`);
-  console.log(`Model: ${input.model}`);
-  console.log(`Template: ${input.template}`);
-  console.log(`Summary: ${input.summary}`);
-  console.log(`Files: ${totalFiles} (create: ${input.createCount}, update: ${input.updateCount}, delete: ${input.deleteCount})`);
-  console.log(`Execution: ${input.dryRun ? "dry-run" : "apply"}`);
+  printSection(`Plan (${input.mode})`);
+  printField("Model", input.model);
+  printField("Template", input.template);
+  printField("Summary", input.summary);
+  printField(
+    "Files",
+    `${totalFiles} (create: ${input.createCount}, update: ${input.updateCount}, delete: ${input.deleteCount})`
+  );
+  printField("Execution", input.dryRun ? "dry-run" : "apply");
 }
 
 function isConfirmationAccepted(value: string): boolean {
@@ -222,7 +235,7 @@ program
   .command("doctor")
   .description("Validate basic monorepo wiring")
   .action(() => {
-    console.log("CLI bootstrapped.");
+    printSuccess("CLI bootstrapped.");
   });
 
 program
@@ -253,7 +266,7 @@ program
           DEFAULT_TEMPLATE_ID) as SupportedTemplateId;
 
         if (!options.template) {
-          console.log(`No template specified. Using default template: ${DEFAULT_TEMPLATE_ID}`);
+          printWarning(`No template specified. Using default: ${DEFAULT_TEMPLATE_ID}`);
         }
 
         await resolveTemplate(selectedTemplateId);
@@ -277,11 +290,13 @@ program
           targetDir
         );
 
-        console.log("Initialized og project successfully.");
-        console.log(`Path: ${targetDir}`);
-        console.log(`Template: ${copiedTemplate.id}`);
-        console.log(`Default model: ${defaultModel}`);
-        console.log(`Next: cd ${targetDir} && pnpm install`);
+        printSection("Init Complete");
+        printSuccess("Project initialized.");
+        printField("Path", targetDir);
+        printField("Template", copiedTemplate.id);
+        printField("Selected model", defaultModel);
+        printNextStep(`cd ${targetDir} && pnpm install`);
+        printNextStep("Run `og create --prompt \"...\" --dry-run` to preview changes.");
       }
     )
   );
@@ -355,14 +370,16 @@ program
         });
 
         if (pipelineResult.diffText.trim().length > 0) {
-          console.log("\nDiff preview:\n");
+          printSection("Diff Preview");
           console.log(pipelineResult.diffText);
         } else {
-          console.log("\nDiff preview: no file content changes detected.");
+          printSection("Diff Preview");
+          printField("Result", "No file content changes detected.");
         }
 
         if (options.dryRun) {
-          console.log("Dry-run mode: no files written.");
+          printSuccess("Dry-run complete. No files were written.");
+          printNextStep("Re-run without `--dry-run` (or add `--yes`) to apply changes.");
           return;
         }
 
@@ -373,12 +390,13 @@ program
         }
 
         if (!shouldApply) {
-          console.log("Confirmation: rejected. No files written.");
+          printWarning("Confirmation rejected. No files were written.");
           return;
         }
 
         await applyPipelineResult(pipelineResult, { projectDir });
-        console.log("Confirmation: accepted. Changes applied.");
+        printSuccess("Changes applied.");
+        printNextStep("Run `og preview` to review the result locally.");
       }
     )
   );
@@ -434,14 +452,16 @@ program
         });
 
         if (pipelineResult.diffText.trim().length > 0) {
-          console.log("\nDiff preview:\n");
+          printSection("Diff Preview");
           console.log(pipelineResult.diffText);
         } else {
-          console.log("\nDiff preview: no file content changes detected.");
+          printSection("Diff Preview");
+          printField("Result", "No file content changes detected.");
         }
 
         if (options.dryRun) {
-          console.log("Dry-run mode: no files written.");
+          printSuccess("Dry-run complete. No files were written.");
+          printNextStep("Re-run without `--dry-run` (or add `--yes`) to apply changes.");
           return;
         }
 
@@ -452,12 +472,13 @@ program
         }
 
         if (!shouldApply) {
-          console.log("Confirmation: rejected. No files written.");
+          printWarning("Confirmation rejected. No files were written.");
           return;
         }
 
         await applyPipelineResult(pipelineResult, { projectDir });
-        console.log("Confirmation: accepted. Changes applied.");
+        printSuccess("Changes applied.");
+        printNextStep("Run `og preview` to verify edits locally.");
       }
     )
   );
@@ -484,20 +505,23 @@ program
 
       const previewConfig = await resolvePreviewConfig(projectRoot, manifest, { port });
 
-      console.log(`Project path: ${projectRoot}`);
-      console.log(`Detected template: ${previewConfig.template}`);
-      console.log(`Command: ${formatPreviewCommand(previewConfig)}`);
+      printSection("Preview");
+      printField("Project", projectRoot);
+      printField("Template", previewConfig.template);
+      printField("Command", formatPreviewCommand(previewConfig));
       if (previewConfig.url) {
-        console.log(`Preview URL: ${previewConfig.url}`);
+        printField("Preview URL", previewConfig.url);
       }
 
       if (options.open) {
         if (previewConfig.url) {
-          console.log(`Open mode: enabled (attempting to open ${previewConfig.url})`);
+          printField("Open mode", `enabled (attempting to open ${previewConfig.url})`);
         } else {
-          console.log("Open mode: enabled (preview URL is unknown, skipping browser open)");
+          printField("Open mode", "enabled (preview URL unknown; skipping browser open)");
         }
       }
+
+      printNextStep("Press Ctrl+C to stop the preview server.");
 
       await runPreview(previewConfig, { open: options.open });
     })
@@ -527,21 +551,24 @@ deployCommand
         yes: options.yes
       });
 
-      console.log(`Project path: ${projectRoot}`);
-      console.log(`Detected template: ${deployConfig.template}`);
-      console.log(`Deploy target: ${deployConfig.deployTarget}`);
-      console.log(`Command: ${formatDeployCommand(deployConfig)}`);
+      printSection("Deploy");
+      printField("Project", projectRoot);
+      printField("Template", deployConfig.template);
+      printField("Target", deployConfig.deployTarget);
+      printField("Command", formatDeployCommand(deployConfig));
 
       if (!options.yes) {
-        console.log("Deploy mode: interactive (Vercel CLI may ask for confirmation)");
+        printField("Mode", "interactive (Vercel CLI may ask for confirmation)");
       }
 
       const result = await runVercelDeploy(deployConfig);
 
       if (result.deploymentUrl) {
-        console.log(`Deployment URL: ${result.deploymentUrl}`);
+        printSuccess("Deployment completed.");
+        printField("Deployment URL", result.deploymentUrl);
+        printNextStep("Run `og sync push` to capture deployment metadata.");
       } else {
-        console.log("Deployment completed, but URL could not be parsed automatically.");
+        printWarning("Deployment completed, but URL could not be parsed automatically.");
         if (result.rawOutput.trim()) {
           console.log(result.rawOutput.trim());
         }
@@ -559,13 +586,16 @@ syncCommand
       const resolved = await resolveSyncProject(process.cwd());
       const result = await pushSyncPayload(resolved.projectDir);
 
-      console.log(`Project path: ${result.projectPath}`);
-      console.log(`Sync provider: ${result.providerInfo.name}`);
-      console.log(`Sync target: ${result.providerInfo.storagePath}`);
-      console.log(`History entries synced: ${result.historyCount}`);
-      console.log(`Artifacts included: ${result.artifactCount}`);
-      console.log(`Manifest synced: yes`);
-      console.log(`Synced at: ${result.payload.syncedAt}`);
+      printSection("Sync Push");
+      printSuccess("Sync completed.");
+      printField("Project", result.projectPath);
+      printField("Sync provider", result.providerInfo.name);
+      printField("Sync target", result.providerInfo.storagePath);
+      printField("History entries", String(result.historyCount));
+      printField("Artifacts", String(result.artifactCount));
+      printField("Manifest synced", "yes");
+      printField("Synced at", result.payload.syncedAt);
+      printNextStep("Run `og sync pull` on another machine to restore metadata state.");
     })
   );
 
@@ -577,13 +607,16 @@ syncCommand
       const resolved = await resolveSyncProject(process.cwd());
       const result = await pullSyncPayload(resolved.projectDir);
 
-      console.log(`Project path: ${result.projectPath}`);
-      console.log(`Sync provider: ${result.providerInfo.name}`);
-      console.log(`Sync target: ${result.providerInfo.storagePath}`);
-      console.log(`History entries synced: ${result.historyCount}`);
-      console.log(`Artifacts included: ${result.artifactCount}`);
-      console.log(`Manifest changed: ${result.manifestChanged ? "yes" : "no"}`);
-      console.log(`Remote payload syncedAt: ${result.payloadSyncedAt}`);
+      printSection("Sync Pull");
+      printSuccess("Sync completed.");
+      printField("Project", result.projectPath);
+      printField("Sync provider", result.providerInfo.name);
+      printField("Sync target", result.providerInfo.storagePath);
+      printField("History entries", String(result.historyCount));
+      printField("Artifacts", String(result.artifactCount));
+      printField("Manifest changed", result.manifestChanged ? "yes" : "no");
+      printField("Remote syncedAt", result.payloadSyncedAt);
+      printNextStep("Run `og preview` to verify pulled project state.");
     })
   );
 
@@ -620,8 +653,11 @@ program
         accountId: identity.accountId
       });
 
-      console.log(`Logged in as ${identity.accountId} (${identity.validationMode} validation).`);
-      console.log(`Endpoint: ${identity.endpoint}`);
+      printSection("Login");
+      printSuccess("Credentials saved.");
+      printField("Account", `${identity.accountId} (${identity.validationMode} validation)`);
+      printField("Endpoint", identity.endpoint);
+      printNextStep("Run `og whoami` to verify session details.");
     })
   );
 
@@ -631,7 +667,7 @@ program
   .action(
     withErrorHandling(async () => {
       await clearAuth();
-      console.log("Logged out. Local auth removed.");
+      printSuccess("Logged out. Local auth removed.");
     })
   );
 
@@ -644,11 +680,12 @@ program
       const client = new ComputeClient({ endpoint: auth.endpoint });
       const identity = await client.validateAuthState(auth);
 
-      console.log(`Account: ${identity.accountId}`);
-      console.log(`Endpoint: ${identity.endpoint}`);
-      console.log(`Token: ${identity.tokenPreview}`);
-      console.log(`Validation: ${identity.validationMode}`);
-      console.log(`Saved At: ${auth.savedAt}`);
+      printSection("Whoami");
+      printField("Account", identity.accountId);
+      printField("Endpoint", identity.endpoint);
+      printField("Token", identity.tokenPreview);
+      printField("Validation", identity.validationMode);
+      printField("Saved at", auth.savedAt);
     })
   );
 
@@ -662,6 +699,8 @@ modelCommand
       const auth = await requireStoredAuth();
       const client = new ComputeClient({ endpoint: auth.endpoint });
       const models = await client.listAvailableModels(auth);
+
+      printSection("Model List");
 
       const idWidth = Math.max(...models.map((model) => model.id.length), 2);
       const nameWidth = Math.max(...models.map((model) => model.name.length), 4);
@@ -721,7 +760,9 @@ modelCommand
       const manifest = await updateManifest({ defaultModel: modelId }, process.cwd());
       const refreshedManifest = await readManifest(process.cwd());
 
-      console.log(`Default model set to '${manifest.defaultModel}' for project '${refreshedManifest.projectName}'.`);
+      printSuccess("Default model updated.");
+      printField("Project", refreshedManifest.projectName);
+      printField("Selected model", manifest.defaultModel);
     })
   );
 

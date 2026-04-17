@@ -8,6 +8,58 @@ export const OG_PROJECT_NOT_FOUND_MESSAGE =
 export const OG_PROJECT_MANIFEST_MISSING_MESSAGE =
   "Current project is missing .og/manifest.json. Run `og init` first.";
 
+const SECTION_DIVIDER = "────────────────────────────────────────";
+
+export function printSection(title: string): void {
+  console.log(`\n${SECTION_DIVIDER}`);
+  console.log(`${title}`);
+  console.log(`${SECTION_DIVIDER}`);
+}
+
+export function printField(label: string, value: string): void {
+  console.log(`• ${label}: ${value}`);
+}
+
+export function printSuccess(message: string): void {
+  console.log(`✓ ${message}`);
+}
+
+export function printWarning(message: string): void {
+  console.log(`! ${message}`);
+}
+
+export function printNextStep(message: string): void {
+  console.log(`→ Next: ${message}`);
+}
+
+export function inferNextStepFromError(message: string): string | undefined {
+  if (/not logged in/i.test(message)) {
+    return "Run `og login --token <token> --endpoint <url>` before this command.";
+  }
+
+  if (/missing node_modules/i.test(message)) {
+    return "Run `pnpm install` in the project directory, then retry.";
+  }
+
+  if (/invalid endpoint|unsupported compute endpoint|openai-compatible proxy path/i.test(message)) {
+    return "Use a valid http(s) endpoint (for example `.../v1/proxy`) and retry `og login`.";
+  }
+
+  if (/timed out after/i.test(message)) {
+    return "Retry in a moment, or use a shorter prompt to reduce provider latency.";
+  }
+
+  if (/rate limit|too many requests|retry after/i.test(message)) {
+    return "Wait for provider cooldown, then retry with the same command.";
+  }
+
+  if (/forbidden|unauthorized|token/i.test(message)) {
+    return "Re-run `og login` with a valid token and endpoint.";
+  }
+
+  return undefined;
+}
+
 export async function pathExists(absolutePath: string): Promise<boolean> {
   try {
     await access(absolutePath);
