@@ -21,6 +21,9 @@ const MAX_CONTEXT_FILES = 80;
 const DEFAULT_FALLBACK_MODEL = "0g-medium";
 const DEFAULT_GENERATION_TIMEOUT_MS = 45_000;
 const CHAT_COMPLETION_PATHS = ["/chat/completions", "/v1/chat/completions"] as const;
+const MAX_TRANSIENT_RETRIES = 1;
+const INITIAL_RETRY_DELAY_MS = 1200;
+const MAX_RETRY_DELAY_MS = 4000;
 
 export type PipelineMode = "create" | "edit";
 export type PlannedFileAction = "create" | "update" | "delete";
@@ -89,6 +92,30 @@ export type PipelineResult = {
 export type ApplyPipelineOptions = {
   projectDir: string;
 };
+
+type GenerationRuntimeErrorCode =
+  | "unsupported-endpoint"
+  | "unauthorized"
+  | "forbidden"
+  | "rate-limit"
+  | "unsupported-model"
+  | "invalid-request"
+  | "invalid-response"
+  | "provider-unavailable"
+  | "timeout"
+  | "network";
+
+class GenerationProviderRuntimeError extends Error {
+  constructor(
+    readonly code: GenerationRuntimeErrorCode,
+    message: string,
+    readonly retryable: boolean = false,
+    readonly retryAfterSeconds?: number
+  ) {
+    super(message);
+    this.name = "GenerationProviderRuntimeError";
+  }
+}
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -368,6 +395,103 @@ function parseProviderErrorMessage(payload: unknown): string | undefined {
   return undefined;
 }
 
+function isRateLimitMessage(message: string | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+
+  return /(rate limit|too many requests|retry after|quota exceeded)/i.test(message);
+}
+
+function isUnsupportedModelMessage(message: string | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+
+  return /(model not supported|requested\s+'.+'\s*,\s*only\s+'.+'\s+is available|unknown model|invalid model)/i.test(message);
+}
+
+function isTransientNetworkMessage(message: string): boolean {
+  return /(network|socket|econnreset|etimedout|enotfound|eai_again|fetch failed|connection reset|connection refused)/i.test(message);
+}
+
+function parseRetryAfterSeconds(response: Response, providerMessage: string | undefined): number | undefined {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const numeric = Number.parseInt(header, 10);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+
+    const dateValue = new Date(header);
+    const diffMs = dateValue.getTime() - Date.now();
+    if (Number.isFinite(diffMs) && diffMs > 0) {
+      return Math.ceil(diffMs / 1000);
+    }
+  }
+
+  if (!providerMessage) {
+    return undefined;
+  }
+
+  const match = providerMessage.match(/(?:retry after|try again in)\s*(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)?/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+
+  const unit = (match[2] || "s").toLowerCase();
+  if (unit.startsWith("h")) {
+    return value * 3600;
+  }
+
+  if (unit.startsWith("m")) {
+    return value * 60;
+  }
+
+  return value;
+}
+
+function formatRetryAfter(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) {
+    return "Retry later.";
+  }
+
+  if (seconds >= 3600) {
+    const hours = Math.ceil(seconds / 3600);
+    return `Retry after about ${hours}h.`;
+  }
+
+  if (seconds >= 60) {
+    const minutes = Math.ceil(seconds / 60);
+    return `Retry after about ${minutes}m.`;
+  }
+
+  return `Retry after about ${seconds}s.`;
+}
+
+function computeRetryDelayMs(attempt: number): number {
+  const delay = INITIAL_RETRY_DELAY_MS * (attempt + 1);
+  return Math.min(delay, MAX_RETRY_DELAY_MS);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatGenerationProviderFailure(error: unknown): string {
+  if (error instanceof GenerationProviderRuntimeError) {
+    return error.message;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return `Generation provider request failed: ${message}`;
+}
+
 function isUnsupportedRoute(responseStatus: number, providerMessage: string | undefined): boolean {
   if (responseStatus === 404) {
     return true;
@@ -490,81 +614,179 @@ export class ComputeGenerationProvider implements GenerationProvider {
 
     let lastError: Error | undefined;
     for (const routePath of CHAT_COMPLETION_PATHS) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+      let unsupportedRoute = false;
 
-      try {
-        const response = await fetchImpl(`${endpoint}${routePath}`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${this.options.token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json"
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        });
+      for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
-        const rawBody = await response.text();
-        const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+        try {
+          const response = await fetchImpl(`${endpoint}${routePath}`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${this.options.token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json"
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
 
-        if (!response.ok) {
-          const providerMessage = parseProviderErrorMessage(parsedBody);
-          if (isUnsupportedRoute(response.status, providerMessage)) {
-            lastError = new Error(`Generation route not found at ${routePath}.`);
+          const rawBody = await response.text();
+          const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+
+          if (!response.ok) {
+            const providerMessage = parseProviderErrorMessage(parsedBody);
+
+            if (isUnsupportedRoute(response.status, providerMessage)) {
+              lastError = new Error(`Generation route not found at ${routePath}.`);
+              unsupportedRoute = true;
+              break;
+            }
+
+            if (response.status === 401) {
+              throw new GenerationProviderRuntimeError(
+                "unauthorized",
+                providerMessage || "Generation request unauthorized. Check token with `og login`.",
+                false
+              );
+            }
+
+            if (response.status === 403) {
+              throw new GenerationProviderRuntimeError(
+                "forbidden",
+                providerMessage || `Generation forbidden for model '${request.model}'. Verify provider permissions and endpoint mapping.`,
+                false
+              );
+            }
+
+            if (response.status === 429 || isRateLimitMessage(providerMessage)) {
+              const retryAfterSeconds = parseRetryAfterSeconds(response, providerMessage);
+              throw new GenerationProviderRuntimeError(
+                "rate-limit",
+                `${providerMessage || "Provider rate limit exceeded."} ${formatRetryAfter(retryAfterSeconds)} No automatic retry was attempted for rate limits.`,
+                false,
+                retryAfterSeconds
+              );
+            }
+
+            if (isUnsupportedModelMessage(providerMessage)) {
+              throw new GenerationProviderRuntimeError(
+                "unsupported-model",
+                `${providerMessage || `Model '${request.model}' is not supported by provider.`} Use '--model <provider-native-model-id>' (for example '--model deepseek/deepseek-chat-v3-0324').`,
+                false
+              );
+            }
+
+            if (response.status >= 500 || response.status === 408) {
+              if (attempt < MAX_TRANSIENT_RETRIES) {
+                await sleep(computeRetryDelayMs(attempt));
+                continue;
+              }
+
+              throw new GenerationProviderRuntimeError(
+                "provider-unavailable",
+                `${providerMessage || `Provider temporary failure (${response.status}).`} Retry later or use a shorter prompt.`,
+                true
+              );
+            }
+
+            if (response.status === 400 || response.status === 422) {
+              throw new GenerationProviderRuntimeError(
+                "invalid-request",
+                `${providerMessage || "Provider rejected this request as invalid."} No automatic retry was attempted because the request appears invalid.`,
+                false
+              );
+            }
+
+            throw new GenerationProviderRuntimeError(
+              "invalid-request",
+              providerMessage || `Generation request failed with status ${response.status}.`,
+              false
+            );
+          }
+
+          if (!rawBody.trim() || !parsedBody || typeof parsedBody !== "object") {
+            throw new GenerationProviderRuntimeError(
+              "invalid-response",
+              "Generation provider returned an empty or invalid response body.",
+              false
+            );
+          }
+
+          const completion = parsedBody as {
+            choices?: Array<{
+              message?: {
+                content?: unknown;
+              };
+              finish_reason?: unknown;
+            }>;
+          };
+
+          const firstChoice = completion.choices?.[0];
+          const content = firstChoice?.message?.content;
+
+          if (typeof content !== "string" || !content.trim()) {
+            throw new GenerationProviderRuntimeError(
+              "invalid-response",
+              "Generation provider response did not include completion text content.",
+              false
+            );
+          }
+
+          return extractJsonFromCompletion(content);
+        } catch (error) {
+          if (error instanceof GenerationProviderRuntimeError) {
+            throw error;
+          }
+
+          if (error instanceof Error && error.name === "AbortError") {
+            if (attempt < MAX_TRANSIENT_RETRIES) {
+              await sleep(computeRetryDelayMs(attempt));
+              continue;
+            }
+
+            throw new GenerationProviderRuntimeError(
+              "timeout",
+              `Generation request timed out after ${requestTimeoutMs}ms. Retry later or try a simpler prompt.`,
+              true
+            );
+          }
+
+          const message = error instanceof Error ? error.message : String(error);
+
+          if (isTransientNetworkMessage(message) && attempt < MAX_TRANSIENT_RETRIES) {
+            await sleep(computeRetryDelayMs(attempt));
             continue;
           }
 
-          if (response.status === 401) {
-            throw new Error(
-              providerMessage || "Generation request unauthorized. Re-run `og login` with valid credentials."
+          if (isTransientNetworkMessage(message)) {
+            throw new GenerationProviderRuntimeError(
+              "network",
+              `Generation request failed due to transient network/provider connectivity issue. Retry later. Details: ${message}`,
+              true
             );
           }
 
-          if (response.status === 403) {
-            throw new Error(
-              providerMessage || `Generation forbidden for model '${request.model}'. Verify account/model permissions.`
-            );
-          }
-
-          throw new Error(providerMessage || `Generation request failed with status ${response.status}.`);
+          throw new GenerationProviderRuntimeError(
+            "invalid-request",
+            message,
+            false
+          );
+        } finally {
+          clearTimeout(timeoutId);
         }
+      }
 
-        if (!rawBody.trim() || !parsedBody || typeof parsedBody !== "object") {
-          throw new Error("Generation provider returned an empty or invalid response body.");
-        }
-
-        const completion = parsedBody as {
-          choices?: Array<{
-            message?: {
-              content?: unknown;
-            };
-            finish_reason?: unknown;
-          }>;
-        };
-
-        const firstChoice = completion.choices?.[0];
-        const content = firstChoice?.message?.content;
-
-        if (typeof content !== "string" || !content.trim()) {
-          throw new Error("Generation provider response did not include completion text content.");
-        }
-
-        return extractJsonFromCompletion(content);
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error(`Generation request timed out after ${requestTimeoutMs}ms.`);
-        }
-
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(message);
-      } finally {
-        clearTimeout(timeoutId);
+      if (unsupportedRoute) {
+        continue;
       }
     }
 
-    throw new Error(
-      `Generation request failed across provider routes: ${CHAT_COMPLETION_PATHS.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""}`.trim()
+    throw new GenerationProviderRuntimeError(
+      "unsupported-endpoint",
+      `Generation request failed across provider routes: ${CHAT_COMPLETION_PATHS.join(", ")}. ${lastError ? `Last error: ${lastError.message}` : ""} Ensure endpoint points to an OpenAI-compatible proxy path (for example '.../v1/proxy').`.trim(),
+      false
     );
   }
 }
@@ -616,8 +838,7 @@ export async function runCreateEditPipeline(options: PipelineRunOptions): Promis
       existingFiles
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Generation provider request failed: ${message}`);
+    throw new Error(formatGenerationProviderFailure(error));
   }
 
   let structuredPlan: StructuredPatchPlan;
