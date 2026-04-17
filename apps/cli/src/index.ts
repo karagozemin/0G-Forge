@@ -8,6 +8,7 @@ import { createManifest, isOgProject, readManifest, updateManifest } from "@og/c
 import {
   ComputeClient,
   DEFAULT_COMPUTE_ENDPOINT,
+  type ComputeModel,
   clearAuth,
   readAuth,
   saveAuth
@@ -105,6 +106,19 @@ type ResolveModelOptions = {
   projectDir?: string;
 };
 
+function isLikelyProxyFallbackCatalog(models: ComputeModel[]): boolean {
+  if (models.length === 0) {
+    return false;
+  }
+
+  if (models.every((model) => model.name.includes("(proxy fallback)"))) {
+    return true;
+  }
+
+  const defaultMockIds = new Set(["0g-large", "0g-medium", "0g-fast"]);
+  return models.every((model) => defaultMockIds.has(model.id));
+}
+
 async function resolveSelectedModel(options: ResolveModelOptions): Promise<{
   auth: Awaited<ReturnType<typeof requireStoredAuth>>;
   model: string;
@@ -112,24 +126,48 @@ async function resolveSelectedModel(options: ResolveModelOptions): Promise<{
   const projectDir = options.projectDir ?? process.cwd();
   const auth = await requireStoredAuth();
   const client = new ComputeClient({ endpoint: auth.endpoint });
-  const models = await client.listAvailableModels(auth);
+  const identity = await client.validateAuthState(auth);
+
+  let models: ComputeModel[] = [];
+  try {
+    models = await client.listAvailableModels(auth);
+  } catch (error) {
+    if (identity.validationMode === "local") {
+      throw error;
+    }
+  }
 
   const manifestModel = (await isOgProject(projectDir))
     ? (await readManifest(projectDir)).defaultModel
     : undefined;
 
   const selectedModel = options.explicitModel?.trim() || manifestModel?.trim() || "0g-medium";
+  const selectedFromExplicit = Boolean(options.explicitModel?.trim());
+  const selectedFromManifest = Boolean(!selectedFromExplicit && manifestModel?.trim());
 
-  if (!models.some((model) => model.id === selectedModel)) {
-    if (options.explicitModel?.trim()) {
-      return {
-        auth,
-        model: selectedModel
-      };
+  if (identity.validationMode === "local") {
+    if (!models.some((model) => model.id === selectedModel)) {
+      throw new Error(
+        `Model '${selectedModel}' not found in available models. Run 'og model list' to inspect options.`
+      );
+    }
+
+    return {
+      auth,
+      model: selectedModel
+    };
+  }
+
+  const hasProviderCatalog = models.length > 0 && !isLikelyProxyFallbackCatalog(models);
+  if (hasProviderCatalog && !models.some((model) => model.id === selectedModel)) {
+    if (!selectedFromExplicit && !selectedFromManifest) {
+      throw new Error(
+        `Model '${selectedModel}' is not listed by the configured provider endpoint. Use '--model <provider-model-id>' or set a provider-supported default model in your project.`
+      );
     }
 
     throw new Error(
-      `Model '${selectedModel}' not found in available models. Run 'og model list' to inspect options.`
+      `Model '${selectedModel}' is not listed by the configured provider endpoint. If your proxy does not expose model listing, keep using explicit provider model ids (for example '--model deepseek/deepseek-chat-v3-0324').`
     );
   }
 
@@ -646,10 +684,34 @@ modelCommand
     withErrorHandling(async (modelId: string) => {
       const auth = await requireStoredAuth();
       const client = new ComputeClient({ endpoint: auth.endpoint });
-      const models = await client.listAvailableModels(auth);
+      const identity = await client.validateAuthState(auth);
 
-      if (!models.some((model) => model.id === modelId)) {
-        throw new Error(`Model '${modelId}' not found in available models.`);
+      if (identity.validationMode === "local") {
+        const models = await client.listAvailableModels(auth);
+        if (!models.some((model) => model.id === modelId)) {
+          throw new Error(`Model '${modelId}' not found in available models.`);
+        }
+      } else {
+        try {
+          const models = await client.listAvailableModels(auth);
+          const hasProviderCatalog = models.length > 0 && !isLikelyProxyFallbackCatalog(models);
+
+          if (hasProviderCatalog && !models.some((model) => model.id === modelId)) {
+            throw new Error(
+              `Model '${modelId}' is not listed by the configured provider endpoint.`
+            );
+          }
+        } catch (error) {
+          if (error instanceof Error) {
+            if (!/not listed by the configured provider endpoint/i.test(error.message)) {
+              throw error;
+            }
+
+            throw error;
+          }
+
+          throw error;
+        }
       }
 
       if (!(await isOgProject(process.cwd()))) {
