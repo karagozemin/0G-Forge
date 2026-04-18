@@ -23,39 +23,67 @@ export type ResolvedTemplate = {
   templatePath: string;
 };
 
-function getWorkspaceRoot(): string {
-  const candidateRoots: string[] = [];
+type CatalogLocation = {
+  catalogPath: string;
+  rootPath: string;
+};
+
+function getCandidateCatalogPaths(): string[] {
+  const candidates: string[] = [];
+  const runtimeDir =
+    typeof __dirname === "string" && __dirname.length > 0
+      ? path.resolve(__dirname)
+      : process.argv[1]
+        ? path.dirname(path.resolve(process.argv[1]))
+        : process.cwd();
+
+  candidates.push(path.resolve(runtimeDir, "../assets/templates/catalog.json"));
+  candidates.push(path.resolve(runtimeDir, "../templates/catalog.json"));
+  candidates.push(path.resolve(runtimeDir, "templates/catalog.json"));
+  candidates.push(path.resolve(runtimeDir, "../../../templates/catalog.json"));
 
   if (typeof __dirname === "string" && __dirname.length > 0) {
-    candidateRoots.push(path.resolve(__dirname, "../../.."));
+    candidates.push(path.resolve(__dirname, "../assets/templates/catalog.json"));
+    candidates.push(path.resolve(__dirname, "../templates/catalog.json"));
+    candidates.push(path.resolve(__dirname, "templates/catalog.json"));
+    candidates.push(path.resolve(__dirname, "../../../templates/catalog.json"));
   }
 
   const entryScriptPath = process.argv[1];
   if (entryScriptPath) {
-    candidateRoots.push(path.resolve(path.dirname(path.resolve(entryScriptPath)), "../../.."));
+    const entryDir = path.dirname(path.resolve(entryScriptPath));
+    candidates.push(path.resolve(entryDir, "../assets/templates/catalog.json"));
+    candidates.push(path.resolve(entryDir, "../templates/catalog.json"));
+    candidates.push(path.resolve(entryDir, "templates/catalog.json"));
+    candidates.push(path.resolve(entryDir, "../../../templates/catalog.json"));
   }
 
-  candidateRoots.push(process.cwd());
+  candidates.push(path.resolve(process.cwd(), "templates/catalog.json"));
 
-  const checkedRoots = new Set<string>();
-  for (const candidateRoot of candidateRoots) {
-    if (checkedRoots.has(candidateRoot)) {
+  return candidates;
+}
+
+function resolveCatalogLocation(): CatalogLocation {
+  const checked = new Set<string>();
+  for (const candidatePath of getCandidateCatalogPaths()) {
+    const resolvedPath = path.resolve(candidatePath);
+    if (checked.has(resolvedPath)) {
       continue;
     }
 
-    checkedRoots.add(candidateRoot);
+    checked.add(resolvedPath);
 
-    const catalogPath = path.join(candidateRoot, "templates", "catalog.json");
-    if (existsSync(catalogPath)) {
-      return candidateRoot;
+    if (existsSync(resolvedPath)) {
+      return {
+        catalogPath: resolvedPath,
+        rootPath: path.resolve(path.dirname(resolvedPath), "..")
+      };
     }
   }
 
-  throw new Error("Could not locate workspace templates/catalog.json.");
-}
-
-function getCatalogPath(): string {
-  return path.join(getWorkspaceRoot(), "templates", "catalog.json");
+  throw new Error(
+    "Could not locate template catalog. If using an installed package, reinstall or run `pnpm --filter @og/cli run prepare:assets` before packaging."
+  );
 }
 
 function isSupportedTemplateId(value: string): value is SupportedTemplateId {
@@ -63,7 +91,7 @@ function isSupportedTemplateId(value: string): value is SupportedTemplateId {
 }
 
 async function readCatalog(): Promise<TemplateCatalog> {
-  const catalogPath = getCatalogPath();
+  const { catalogPath } = resolveCatalogLocation();
   const raw = await readFile(catalogPath, "utf8");
   const parsed = JSON.parse(raw) as unknown;
 
@@ -94,7 +122,8 @@ export async function resolveTemplate(templateId: string): Promise<ResolvedTempl
     throw new Error(`Template '${templateId}' not found in catalog.`);
   }
 
-  const templatePath = path.resolve(getWorkspaceRoot(), entry.path);
+  const { rootPath } = resolveCatalogLocation();
+  const templatePath = path.resolve(rootPath, entry.path);
 
   try {
     await access(templatePath);

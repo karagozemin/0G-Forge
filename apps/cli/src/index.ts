@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -53,6 +54,35 @@ import {
 } from "./runtime-utils.js";
 
 const program = new Command();
+
+function resolveCliVersion(): string {
+  const fallbackVersion = "0.1.0";
+  const runtimeDir =
+    typeof __dirname === "string" && __dirname.length > 0
+      ? path.resolve(__dirname)
+      : process.argv[1]
+        ? path.dirname(path.resolve(process.argv[1]))
+        : process.cwd();
+
+  const candidatePaths = [
+    path.resolve(runtimeDir, "../package.json"),
+    path.resolve(runtimeDir, "../../package.json")
+  ];
+
+  for (const packageJsonPath of candidatePaths) {
+    try {
+      const raw = readFileSync(packageJsonPath, "utf8");
+      const parsed = JSON.parse(raw) as { version?: unknown };
+      if (typeof parsed.version === "string" && parsed.version.trim().length > 0) {
+        return parsed.version.trim();
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return fallbackVersion;
+}
 
 type AsyncAction<TArgs extends unknown[]> = (...args: TArgs) => Promise<void>;
 
@@ -229,7 +259,7 @@ function parsePort(rawPort: string | undefined): number | undefined {
 program
   .name("og")
   .description("Terminal-native companion for 0G App")
-  .version("0.1.0");
+  .version(resolveCliVersion());
 
 program
   .command("doctor")
