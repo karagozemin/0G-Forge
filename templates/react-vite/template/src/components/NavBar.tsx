@@ -1,5 +1,3 @@
-import { TerminalSquare } from "lucide-react";
-
 const README_URL = "https://github.com/karagozemin/0G/blob/main/README.md";
 
 const navItems = [
@@ -14,8 +12,8 @@ export function NavBar() {
     <header className="sticky top-0 z-40 border-b border-white/10 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <a href="#top" className="inline-flex items-center gap-2 font-semibold tracking-tight text-white">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-panel">
-            <TerminalSquare className="h-4 w-4 text-brand" />
+          <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-line bg-panel">
+            <img src="/0G-Forge-Logo.jpeg" alt="0G Forge logo" className="h-full w-full object-cover" />
           </span>
           <span>0G Forge</span>
         </a>

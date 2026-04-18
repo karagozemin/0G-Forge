@@ -1,6 +1,7 @@
 <div align="center">
   <h1>0G Forge</h1>
   <img src="./public/0G-Forge-Logo.jpeg" alt="0G Forge Logo" width="200" />
+  
   <p><strong>0G Forge</strong> is a terminal-native companion for the 0G app workflow: prompt-driven project changes, local preview, Vercel deploy, and lightweight sync metadata.</p>
   <p>This repository is a working MVP focused on builder workflow speed and inspectability from the terminal.</p>
 </div>

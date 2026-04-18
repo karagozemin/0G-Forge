@@ -16,6 +16,11 @@ export default function App() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-20 px-4 pb-20 pt-14 sm:px-6 lg:px-8">
         <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="space-y-6">
+            <div className="inline-flex items-center gap-3 rounded-xl border border-line bg-panel/70 px-3 py-2">
+              <img src="/0G-Forge-Logo.jpeg" alt="0G Forge logo" className="h-10 w-10 rounded-md object-cover" />
+              <span className="text-sm font-medium text-white">0G Forge</span>
+            </div>
+
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs text-textSoft">
               <TerminalSquare className="h-3.5 w-3.5 text-brand" />
               Terminal-native companion to 0G App
