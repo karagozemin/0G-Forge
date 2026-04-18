@@ -65,6 +65,61 @@ pnpm --filter @og/cli run dev --help
 
 For real proxy demo commands and speaking notes, see `DEMO.md`.
 
+## How builders use this (practical flow)
+
+### 1) Login
+
+Real proxy mode:
+
+```bash
+pnpm --filter @og/cli run dev login \
+  --token "$OG_REAL_TOKEN" \
+  --endpoint "https://compute-network-4.integratenetwork.work/v1/proxy"
+```
+
+Mock mode (demo-safe fallback):
+
+```bash
+pnpm --filter @og/cli run dev login --token mock-token --endpoint mock://local
+```
+
+### 2) Initialize a project
+
+```bash
+pnpm --filter @og/cli run dev init --template react-vite --dir ./my-app --yes
+cd ./my-app
+pnpm install
+```
+
+### 3) Generate changes from a prompt (safe first run)
+
+```bash
+pnpm --dir .. --filter @og/cli run dev create \
+  --prompt "Add a hero section" \
+  --dry-run \
+  --yes
+```
+
+### 4) Apply and iterate
+
+```bash
+pnpm --dir .. --filter @og/cli run dev create --prompt "Add a hero section" --yes
+pnpm --dir .. --filter @og/cli run dev edit --prompt "Improve spacing and CTA contrast" --dry-run --yes
+```
+
+### 5) Preview, deploy, sync
+
+```bash
+pnpm --dir .. --filter @og/cli run dev preview --port 4173
+pnpm --dir .. --filter @og/cli run dev deploy vercel --yes
+pnpm --dir .. --filter @og/cli run dev sync push
+```
+
+### Notes for first-time users
+
+- If you see timeout/rate-limit errors in real mode, retry or switch to `mock://local` for deterministic demos.
+- `create` and `edit` are easiest to start with `--dry-run` so you can inspect plan and diff output before writing files.
+
 ## Core command surface (MVP)
 
 ```text
