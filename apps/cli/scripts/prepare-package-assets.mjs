@@ -6,6 +6,47 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceTemplatesDir = path.resolve(scriptDir, "../../../templates");
 const destinationTemplatesDir = path.resolve(scriptDir, "../assets/templates");
 
+const EXCLUDED_DIR_NAMES = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".turbo",
+  ".pnpm-store"
+]);
+
+const EXCLUDED_FILE_NAMES = new Set([
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock"
+]);
+
+function shouldCopy(sourcePath) {
+  const relativePath = path.relative(sourceTemplatesDir, sourcePath);
+  if (!relativePath || relativePath === ".") {
+    return true;
+  }
+
+  const normalized = relativePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  const baseName = segments[segments.length - 1];
+
+  if (segments.some((segment) => EXCLUDED_DIR_NAMES.has(segment))) {
+    return false;
+  }
+
+  if (EXCLUDED_FILE_NAMES.has(baseName)) {
+    return false;
+  }
+
+  if (baseName.endsWith(".tsbuildinfo")) {
+    return false;
+  }
+
+  return true;
+}
+
 async function ensureSourceTemplatesExist() {
   try {
     await access(path.join(sourceTemplatesDir, "catalog.json"));
@@ -21,7 +62,8 @@ async function prepareAssets() {
   await cp(sourceTemplatesDir, destinationTemplatesDir, {
     recursive: true,
     force: true,
-    errorOnExist: false
+    errorOnExist: false,
+    filter: shouldCopy
   });
 }
 
