@@ -258,7 +258,7 @@ function parsePort(rawPort: string | undefined): number | undefined {
 
 program
   .name("og")
-  .description("Terminal-native companion for 0G App")
+  .description("0G Forge: terminal-native companion for 0G App")
   .version(resolveCliVersion());
 
 program
