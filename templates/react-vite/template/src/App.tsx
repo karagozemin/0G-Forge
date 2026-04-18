@@ -6,7 +6,7 @@ import { TerminalPanel } from "./components/TerminalPanel";
 import { UsageGuide } from "./components/UsageGuide";
 import { WorkflowSteps } from "./components/WorkflowSteps";
 
-const README_URL = "https://github.com/karagozemin/0G/blob/main/README.md";
+const README_URL = "https://github.com/karagozemin/0G-Forge";
 
 export default function App() {
   return (

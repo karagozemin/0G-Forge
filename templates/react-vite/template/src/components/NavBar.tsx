@@ -1,4 +1,4 @@
-const README_URL = "https://github.com/karagozemin/0G/blob/main/README.md";
+const DOCS_URL = "https://github.com/karagozemin/0G-Forge";
 
 const navItems = [
   { label: "How to Use", href: "#how-to-use" },
@@ -25,21 +25,15 @@ export function NavBar() {
               {item.label}
             </a>
           ))}
-          <a
-            href={README_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="transition hover:text-white"
-          >
-            README
-          </a>
         </nav>
 
         <a
-          href="#demo"
+          href={DOCS_URL}
+          target="_blank"
+          rel="noreferrer"
           className="inline-flex items-center rounded-lg border border-line bg-panel px-3 py-2 text-xs font-medium text-white transition hover:border-brand hover:text-brand md:text-sm"
         >
-          View Demo Flow
+          View Docs
         </a>
       </div>
     </header>
