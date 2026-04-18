@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { access, cp, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 export const SUPPORTED_TEMPLATE_IDS = ["react-vite", "nextjs-app", "static-landing"] as const;
@@ -30,12 +31,25 @@ type CatalogLocation = {
 
 function getCandidateCatalogPaths(): string[] {
   const candidates: string[] = [];
+  let moduleDir: string | null = null;
+  try {
+    moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    moduleDir = null;
+  }
   const runtimeDir =
     typeof __dirname === "string" && __dirname.length > 0
       ? path.resolve(__dirname)
       : process.argv[1]
-        ? path.dirname(path.resolve(process.argv[1]))
+        ? path.dirname(realpathSync(path.resolve(process.argv[1])))
         : process.cwd();
+
+  if (moduleDir) {
+    candidates.push(path.resolve(moduleDir, "../assets/templates/catalog.json"));
+    candidates.push(path.resolve(moduleDir, "../templates/catalog.json"));
+    candidates.push(path.resolve(moduleDir, "templates/catalog.json"));
+    candidates.push(path.resolve(moduleDir, "../../../templates/catalog.json"));
+  }
 
   candidates.push(path.resolve(runtimeDir, "../assets/templates/catalog.json"));
   candidates.push(path.resolve(runtimeDir, "../templates/catalog.json"));
@@ -51,7 +65,7 @@ function getCandidateCatalogPaths(): string[] {
 
   const entryScriptPath = process.argv[1];
   if (entryScriptPath) {
-    const entryDir = path.dirname(path.resolve(entryScriptPath));
+    const entryDir = path.dirname(realpathSync(path.resolve(entryScriptPath)));
     candidates.push(path.resolve(entryDir, "../assets/templates/catalog.json"));
     candidates.push(path.resolve(entryDir, "../templates/catalog.json"));
     candidates.push(path.resolve(entryDir, "templates/catalog.json"));

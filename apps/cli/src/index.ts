@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -61,7 +61,7 @@ function resolveCliVersion(): string {
     typeof __dirname === "string" && __dirname.length > 0
       ? path.resolve(__dirname)
       : process.argv[1]
-        ? path.dirname(path.resolve(process.argv[1]))
+        ? path.dirname(realpathSync(path.resolve(process.argv[1])))
         : process.cwd();
 
   const candidatePaths = [
