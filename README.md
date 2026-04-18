@@ -1,6 +1,6 @@
 # 0G Forge
 
-![0G Forge Logo](./public/0G-Forge-Logo.jpeg)
+<img src="./public/0G-Forge-Logo.jpeg" alt="0G Forge Logo" width="200" />
 
 `0G Forge` is a terminal-native companion for the 0G app workflow: prompt-driven project changes, local preview, Vercel deploy, and lightweight sync metadata.
 
