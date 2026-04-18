@@ -45,6 +45,7 @@ See `DEMO.md` for exact commands.
 ## Current limitations / tradeoffs
 
 - Provider timeouts or rate limits can still occur on real endpoints.
+- Under heavy load, upstream may also close sockets mid-request; CLI retries and diagnostics were improved, but final success still depends on live provider availability.
 - Template set is intentionally small (`react-vite`, `nextjs-app`, `static-landing`).
 - Deploy target is currently Vercel only.
 - Sync is lightweight metadata sync, not full project backup/restore.

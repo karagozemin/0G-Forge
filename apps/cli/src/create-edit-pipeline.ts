@@ -16,14 +16,82 @@ const SKIPPED_DIRS = new Set([
   ".pnpm-store"
 ]);
 
+const BINARY_FILE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".ico",
+  ".bmp",
+  ".tiff",
+  ".mp4",
+  ".mov",
+  ".webm",
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".pdf",
+  ".zip",
+  ".gz",
+  ".tar",
+  ".7z",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+  ".eot",
+  ".wasm",
+  ".exe",
+  ".dmg",
+  ".bin"
+]);
+
 const MAX_FILE_BYTES = 120_000;
 const MAX_CONTEXT_FILES = 80;
 const DEFAULT_FALLBACK_MODEL = "0g-medium";
-const DEFAULT_GENERATION_TIMEOUT_MS = 45_000;
 const CHAT_COMPLETION_PATHS = ["/chat/completions", "/v1/chat/completions"] as const;
-const MAX_TRANSIENT_RETRIES = 1;
 const INITIAL_RETRY_DELAY_MS = 1200;
 const MAX_RETRY_DELAY_MS = 4000;
+
+function readPositiveIntEnv(
+  name: string,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed < min) {
+    return fallback;
+  }
+
+  return Math.min(parsed, max);
+}
+
+const DEFAULT_GENERATION_TIMEOUT_MS = readPositiveIntEnv(
+  "OG_GENERATION_TIMEOUT_MS",
+  45_000,
+  5_000,
+  300_000
+);
+const MAX_TRANSIENT_RETRIES = readPositiveIntEnv(
+  "OG_GENERATION_MAX_RETRIES",
+  3,
+  0,
+  10
+);
+const MAX_RATE_LIMIT_WAIT_MS = readPositiveIntEnv(
+  "OG_GENERATION_MAX_RATE_LIMIT_WAIT_MS",
+  30_000,
+  1_000,
+  300_000
+);
 
 export type PipelineMode = "create" | "edit";
 export type PlannedFileAction = "create" | "update" | "delete";
@@ -281,6 +349,11 @@ async function collectProjectFiles(projectDir: string): Promise<ExistingProjectF
       const absolutePath = path.join(dirPath, entry.name);
       const relativePath = path.relative(projectDir, absolutePath).replace(/\\/g, "/");
 
+      const extension = path.extname(entry.name).toLowerCase();
+      if (BINARY_FILE_EXTENSIONS.has(extension)) {
+        continue;
+      }
+
       if (!relativePath || relativePath.startsWith("..")) {
         continue;
       }
@@ -415,6 +488,32 @@ function isTransientNetworkMessage(message: string): boolean {
   return /(network|socket|econnreset|etimedout|enotfound|eai_again|fetch failed|connection reset|connection refused)/i.test(message);
 }
 
+function formatErrorCause(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (!cause || typeof cause !== "object") {
+    return undefined;
+  }
+
+  const causeRecord = cause as { code?: unknown; message?: unknown; name?: unknown };
+  const code = typeof causeRecord.code === "string" ? causeRecord.code : undefined;
+  const message = typeof causeRecord.message === "string" ? causeRecord.message : undefined;
+  const name = typeof causeRecord.name === "string" ? causeRecord.name : undefined;
+
+  const pieces = [name, code, message].filter(
+    (piece): piece is string => typeof piece === "string" && piece.trim().length > 0
+  );
+
+  if (pieces.length === 0) {
+    return undefined;
+  }
+
+  return pieces.join(" / ");
+}
+
 function parseRetryAfterSeconds(response: Response, providerMessage: string | undefined): number | undefined {
   const header = response.headers.get("retry-after");
   if (header) {
@@ -477,6 +576,25 @@ function formatRetryAfter(seconds: number | undefined): string {
 function computeRetryDelayMs(attempt: number): number {
   const delay = INITIAL_RETRY_DELAY_MS * (attempt + 1);
   return Math.min(delay, MAX_RETRY_DELAY_MS);
+}
+
+function computeRateLimitRetryDelayMs(retryAfterSeconds: number | undefined, attempt: number): number {
+  if (retryAfterSeconds && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, MAX_RATE_LIMIT_WAIT_MS);
+  }
+
+  return Math.min(computeRetryDelayMs(attempt) * 2, MAX_RATE_LIMIT_WAIT_MS);
+}
+
+function safeParseJson(rawBody: string):
+  | { ok: true; value: unknown }
+  | { ok: false; error: Error } {
+  try {
+    return { ok: true, value: JSON.parse(rawBody) as unknown };
+  } catch (error) {
+    const parseError = error instanceof Error ? error : new Error(String(error));
+    return { ok: false, error: parseError };
+  }
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -626,14 +744,24 @@ export class ComputeGenerationProvider implements GenerationProvider {
             headers: {
               Authorization: `Bearer ${this.options.token}`,
               "Content-Type": "application/json",
-              Accept: "application/json"
+              Accept: "application/json",
+              Connection: "close"
             },
             body: JSON.stringify(payload),
             signal: controller.signal
           });
 
           const rawBody = await response.text();
-          const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+          let parsedBody: unknown;
+          let bodyParseError: Error | undefined;
+          if (rawBody.trim()) {
+            const parsed = safeParseJson(rawBody);
+            if (parsed.ok) {
+              parsedBody = parsed.value;
+            } else {
+              bodyParseError = parsed.error;
+            }
+          }
 
           if (!response.ok) {
             const providerMessage = parseProviderErrorMessage(parsedBody);
@@ -662,10 +790,16 @@ export class ComputeGenerationProvider implements GenerationProvider {
 
             if (response.status === 429 || isRateLimitMessage(providerMessage)) {
               const retryAfterSeconds = parseRetryAfterSeconds(response, providerMessage);
+
+              if (attempt < MAX_TRANSIENT_RETRIES) {
+                await sleep(computeRateLimitRetryDelayMs(retryAfterSeconds, attempt));
+                continue;
+              }
+
               throw new GenerationProviderRuntimeError(
                 "rate-limit",
-                `${providerMessage || "Provider rate limit exceeded."} ${formatRetryAfter(retryAfterSeconds)} No automatic retry was attempted for rate limits.`,
-                false,
+                `${providerMessage || "Provider rate limit exceeded."} ${formatRetryAfter(retryAfterSeconds)} Automatic retries were exhausted (${MAX_TRANSIENT_RETRIES + 1} attempts).`,
+                true,
                 retryAfterSeconds
               );
             }
@@ -701,7 +835,16 @@ export class ComputeGenerationProvider implements GenerationProvider {
 
             throw new GenerationProviderRuntimeError(
               "invalid-request",
-              providerMessage || `Generation request failed with status ${response.status}.`,
+              providerMessage || bodyParseError?.message || `Generation request failed with status ${response.status}.`,
+              false
+            );
+          }
+
+          if (bodyParseError) {
+            const contentType = response.headers.get("content-type") || "unknown";
+            throw new GenerationProviderRuntimeError(
+              "invalid-response",
+              `Generation provider returned non-JSON success response (content-type: ${contentType}). Details: ${bodyParseError.message}`,
               false
             );
           }
@@ -754,16 +897,18 @@ export class ComputeGenerationProvider implements GenerationProvider {
           }
 
           const message = error instanceof Error ? error.message : String(error);
+          const causeDetails = formatErrorCause(error);
+          const messageWithCause = causeDetails ? `${message} (${causeDetails})` : message;
 
-          if (isTransientNetworkMessage(message) && attempt < MAX_TRANSIENT_RETRIES) {
+          if (isTransientNetworkMessage(messageWithCause) && attempt < MAX_TRANSIENT_RETRIES) {
             await sleep(computeRetryDelayMs(attempt));
             continue;
           }
 
-          if (isTransientNetworkMessage(message)) {
+          if (isTransientNetworkMessage(messageWithCause)) {
             throw new GenerationProviderRuntimeError(
               "network",
-              `Generation request failed due to transient network/provider connectivity issue. Retry later. Details: ${message}`,
+              `Generation request failed due to transient network/provider connectivity issue. Retry later. Details: ${messageWithCause}`,
               true
             );
           }

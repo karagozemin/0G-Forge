@@ -178,6 +178,8 @@ Supported templates: `react-vite`, `nextjs-app`, `static-landing`.
 
 ## Current limitations (truthful)
 
+During real provider usage, generation calls may intermittently fail due to upstream capacity conditions (for example `429` rate limits, concurrent request caps, timeout windows, or transient socket closes). The CLI now includes bounded retries and clearer diagnostics, but end-to-end success still depends on live provider availability at request time.
+
 - Real-provider generation can still fail due to timeout/rate limits.
 - Deploy target is Vercel only.
 - Sync is lightweight metadata sync, not full project backup/restore.
