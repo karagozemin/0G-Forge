@@ -2,9 +2,26 @@
   <h1>0G Forge</h1>
   <img src="./public/0G-Forge-Logo.jpeg" alt="0G Forge Logo" width="200" />
   
+
   <p><strong>0G Forge</strong> is a terminal-native companion for the 0G app workflow: prompt-driven project changes, local preview, Vercel deploy, and lightweight sync metadata.</p>
+  
   <p>This repository is a working MVP focused on builder workflow speed and inspectability from the terminal.</p>
 </div>
+
+## Install (Public npm)
+
+```bash
+npm install -g @kaptan_web3/og-cli
+og --version
+og --help
+```
+
+If you see `EEXIST` for `og`:
+
+```bash
+npm uninstall -g @og/cli
+npm install -g @kaptan_web3/og-cli
+```
 
 ## 2-minute reviewer overview
 
