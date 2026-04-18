@@ -39,21 +39,32 @@
 
 ### Prerequisites
 - Node.js
-- `pnpm`
+- npm
+- `pnpm` (only if you want to run from source)
 - `vercel` CLI (for deploy commands)
 
-### Install + build
+### Install globally from npm (recommended)
+
+```bash
+npm install -g @kaptan_web3/og-cli
+og --version
+og --help
+```
+
+If you see `EEXIST` for `og`, remove the old global package and reinstall:
+
+```bash
+npm uninstall -g @og/cli
+npm install -g @kaptan_web3/og-cli
+```
+
+### Run from source (contributors)
 
 ```bash
 git clone <repo-url>
 cd 0G
 pnpm install
 pnpm build
-```
-
-### Run CLI from source
-
-```bash
 pnpm --filter @og/cli run dev --help
 ```
 
@@ -72,7 +83,7 @@ For real proxy demo commands and speaking notes, see `DEMO.md`.
 Real proxy mode:
 
 ```bash
-pnpm --filter @og/cli run dev login \
+og login \
   --token "$OG_REAL_TOKEN" \
   --endpoint "https://compute-network-4.integratenetwork.work/v1/proxy"
 ```
@@ -80,13 +91,13 @@ pnpm --filter @og/cli run dev login \
 Mock mode (demo-safe fallback):
 
 ```bash
-pnpm --filter @og/cli run dev login --token mock-token --endpoint mock://local
+og login --token mock-token --endpoint mock://local
 ```
 
 ### 2) Initialize a project
 
 ```bash
-pnpm --filter @og/cli run dev init --template react-vite --dir ./my-app --yes
+og init --template react-vite --dir ./my-app --yes
 cd ./my-app
 pnpm install
 ```
@@ -94,7 +105,7 @@ pnpm install
 ### 3) Generate changes from a prompt (safe first run)
 
 ```bash
-pnpm --dir .. --filter @og/cli run dev create \
+og create \
   --prompt "Add a hero section" \
   --dry-run \
   --yes
@@ -103,22 +114,24 @@ pnpm --dir .. --filter @og/cli run dev create \
 ### 4) Apply and iterate
 
 ```bash
-pnpm --dir .. --filter @og/cli run dev create --prompt "Add a hero section" --yes
-pnpm --dir .. --filter @og/cli run dev edit --prompt "Improve spacing and CTA contrast" --dry-run --yes
+og create --prompt "Add a hero section" --yes
+og edit --prompt "Improve spacing and CTA contrast" --dry-run --yes
 ```
 
 ### 5) Preview, deploy, sync
 
 ```bash
-pnpm --dir .. --filter @og/cli run dev preview --port 4173
-pnpm --dir .. --filter @og/cli run dev deploy vercel --yes
-pnpm --dir .. --filter @og/cli run dev sync push
+og preview --port 4173
+og deploy vercel --yes
+og sync push
 ```
 
 ### Notes for first-time users
 
 - If you see timeout/rate-limit errors in real mode, retry or switch to `mock://local` for deterministic demos.
 - `create` and `edit` are easiest to start with `--dry-run` so you can inspect plan and diff output before writing files.
+- Upgrade globally with `npm install -g @kaptan_web3/og-cli@latest`.
+- Remove globally with `npm uninstall -g @kaptan_web3/og-cli`.
 
 ## Core command surface (MVP)
 

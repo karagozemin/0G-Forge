@@ -35,6 +35,13 @@ export default function App() {
               Login, initialize, create/edit with diff-first feedback, preview locally, deploy to Vercel, and sync lightweight project metadata — all from CLI.
             </p>
 
+            <div className="max-w-xl rounded-xl border border-line bg-panel/70 p-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-brand">Install globally</p>
+              <pre className="overflow-x-auto text-xs text-slate-200 sm:text-sm">
+                <code>$ npm install -g @kaptan_web3/og-cli{"\n"}$ og --help</code>
+              </pre>
+            </div>
+
             <div className="flex flex-wrap items-center gap-3">
               <a
                 href="#demo"

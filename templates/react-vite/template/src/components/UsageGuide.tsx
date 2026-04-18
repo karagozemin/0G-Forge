@@ -2,6 +2,10 @@ import { CheckCircle2 } from "lucide-react";
 
 const steps = [
   {
+    title: "0) Install",
+    detail: "Install globally from npm, then verify with version/help commands."
+  },
+  {
     title: "1) Login",
     detail: "Authenticate using either real proxy mode or mock mode."
   },
@@ -28,6 +32,24 @@ const steps = [
 ];
 
 const commandBlocks = [
+  {
+    title: "Install globally (public npm)",
+    command: [
+      "npm install -g @kaptan_web3/og-cli",
+      "og --version",
+      "og --help",
+      "npm install -g @kaptan_web3/og-cli@latest",
+      "npm uninstall -g @kaptan_web3/og-cli"
+    ]
+  },
+  {
+    title: "If install shows EEXIST for og",
+    command: [
+      "npm uninstall -g @og/cli",
+      "npm install -g @kaptan_web3/og-cli",
+      "og --help"
+    ]
+  },
   {
     title: "Real proxy (standard usage)",
     command: [
