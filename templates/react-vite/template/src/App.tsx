@@ -3,6 +3,7 @@ import { FeatureGrid } from "./components/FeatureGrid";
 import { NavBar } from "./components/NavBar";
 import { SectionHeading } from "./components/SectionHeading";
 import { TerminalPanel } from "./components/TerminalPanel";
+import { UsageGuide } from "./components/UsageGuide";
 import { WorkflowSteps } from "./components/WorkflowSteps";
 
 const README_URL = "https://github.com/karagozemin/0G/blob/main/README.md";
@@ -61,6 +62,8 @@ export default function App() {
             description="0G Forge is the terminal-native companion to 0G App: practical prompt-to-app workflow for builders who iterate fastest in CLI."
           />
         </section>
+
+        <UsageGuide />
 
         <section id="workflow" className="space-y-8">
           <SectionHeading

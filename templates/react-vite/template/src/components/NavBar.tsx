@@ -1,6 +1,7 @@
 const README_URL = "https://github.com/karagozemin/0G/blob/main/README.md";
 
 const navItems = [
+  { label: "How to Use", href: "#how-to-use" },
   { label: "Workflow", href: "#workflow" },
   { label: "Features", href: "#features" },
   { label: "Trust", href: "#trust" },
