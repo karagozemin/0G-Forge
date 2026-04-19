@@ -1,9 +1,13 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createManifest, isOgProject, readManifest } from "@og/core";
 import { MOCK_COMPUTE_ENDPOINT } from "@og/compute-client";
 import { DEFAULT_TEMPLATE_ID } from "./template-utils.js";
 import { createUnifiedDiff } from "./diff-utils.js";
+
+const execFileAsync = promisify(execFile);
 
 const SKIPPED_DIRS = new Set([
   ".git",
@@ -91,6 +95,24 @@ const MAX_RATE_LIMIT_WAIT_MS = readPositiveIntEnv(
   30_000,
   1_000,
   300_000
+);
+const RATE_LIMIT_RETRY_BASE_MS = readPositiveIntEnv(
+  "OG_GENERATION_RATE_LIMIT_RETRY_BASE_MS",
+  5_000,
+  1_000,
+  60_000
+);
+const NETWORK_RETRY_BASE_MS = readPositiveIntEnv(
+  "OG_GENERATION_NETWORK_RETRY_BASE_MS",
+  2_000,
+  500,
+  30_000
+);
+const MAX_NETWORK_RETRY_WAIT_MS = readPositiveIntEnv(
+  "OG_GENERATION_MAX_NETWORK_WAIT_MS",
+  20_000,
+  1_000,
+  120_000
 );
 
 export type PipelineMode = "create" | "edit";
@@ -488,6 +510,10 @@ function isTransientNetworkMessage(message: string): boolean {
   return /(network|socket|econnreset|etimedout|enotfound|eai_again|fetch failed|connection reset|connection refused)/i.test(message);
 }
 
+function isSocketClosureMessage(message: string): boolean {
+  return /(und_err_socket|other side closed|socket hang up|socketerror)/i.test(message);
+}
+
 function formatErrorCause(error: unknown): string | undefined {
   if (!error || typeof error !== "object") {
     return undefined;
@@ -514,8 +540,11 @@ function formatErrorCause(error: unknown): string | undefined {
   return pieces.join(" / ");
 }
 
-function parseRetryAfterSeconds(response: Response, providerMessage: string | undefined): number | undefined {
-  const header = response.headers.get("retry-after");
+function parseRetryAfterSeconds(
+  headers: Headers | undefined,
+  providerMessage: string | undefined
+): number | undefined {
+  const header = headers?.get("retry-after");
   if (header) {
     const numeric = Number.parseInt(header, 10);
     if (Number.isFinite(numeric) && numeric > 0) {
@@ -555,6 +584,72 @@ function parseRetryAfterSeconds(response: Response, providerMessage: string | un
   return value;
 }
 
+function parseCurlStatusOutput(stdout: string): { status: number; body: string } | undefined {
+  const marker = "\n__OG_HTTP_STATUS__:";
+  const markerIndex = stdout.lastIndexOf(marker);
+  if (markerIndex < 0) {
+    return undefined;
+  }
+
+  const body = stdout.slice(0, markerIndex);
+  const statusRaw = stdout.slice(markerIndex + marker.length).trim();
+  const status = Number.parseInt(statusRaw, 10);
+  if (!Number.isFinite(status)) {
+    return undefined;
+  }
+
+  return { status, body };
+}
+
+async function postWithCurlFallback(options: {
+  url: string;
+  token: string;
+  payload: unknown;
+  timeoutMs: number;
+}): Promise<{ status: number; rawBody: string } | undefined> {
+  const timeoutSeconds = Math.max(5, Math.ceil(options.timeoutMs / 1000));
+
+  try {
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "--http1.1",
+        "--connect-timeout",
+        "10",
+        "--max-time",
+        String(timeoutSeconds),
+        "-X",
+        "POST",
+        "-H",
+        `Authorization: Bearer ${options.token}`,
+        "-H",
+        "Content-Type: application/json",
+        "-H",
+        "Accept: application/json",
+        "-d",
+        JSON.stringify(options.payload),
+        options.url,
+        "-w",
+        "\\n__OG_HTTP_STATUS__:%{http_code}"
+      ],
+      { maxBuffer: 3 * 1024 * 1024 }
+    );
+
+    const parsed = parseCurlStatusOutput(stdout);
+    if (!parsed) {
+      return undefined;
+    }
+
+    return {
+      status: parsed.status,
+      rawBody: parsed.body
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function formatRetryAfter(seconds: number | undefined): string {
   if (!seconds || seconds <= 0) {
     return "Retry later.";
@@ -573,9 +668,14 @@ function formatRetryAfter(seconds: number | undefined): string {
   return `Retry after about ${seconds}s.`;
 }
 
-function computeRetryDelayMs(attempt: number): number {
-  const delay = INITIAL_RETRY_DELAY_MS * (attempt + 1);
-  return Math.min(delay, MAX_RETRY_DELAY_MS);
+function computeBackoffDelayMs(
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number
+): number {
+  const exponentialMultiplier = 2 ** attempt;
+  const delay = baseDelayMs * exponentialMultiplier;
+  return Math.min(delay, maxDelayMs);
 }
 
 function computeRateLimitRetryDelayMs(retryAfterSeconds: number | undefined, attempt: number): number {
@@ -583,7 +683,20 @@ function computeRateLimitRetryDelayMs(retryAfterSeconds: number | undefined, att
     return Math.min(retryAfterSeconds * 1000, MAX_RATE_LIMIT_WAIT_MS);
   }
 
-  return Math.min(computeRetryDelayMs(attempt) * 2, MAX_RATE_LIMIT_WAIT_MS);
+  return computeBackoffDelayMs(attempt, RATE_LIMIT_RETRY_BASE_MS, MAX_RATE_LIMIT_WAIT_MS);
+}
+
+function computeTransientRetryDelayMs(attempt: number): number {
+  return computeBackoffDelayMs(attempt, INITIAL_RETRY_DELAY_MS, MAX_RETRY_DELAY_MS);
+}
+
+function computeNetworkRetryDelayMs(attempt: number, message: string): number {
+  const delay = computeBackoffDelayMs(attempt, NETWORK_RETRY_BASE_MS, MAX_NETWORK_RETRY_WAIT_MS);
+  if (!isSocketClosureMessage(message)) {
+    return delay;
+  }
+
+  return Math.min(Math.round(delay * 1.5), MAX_NETWORK_RETRY_WAIT_MS);
 }
 
 function safeParseJson(rawBody: string):
@@ -739,19 +852,51 @@ export class ComputeGenerationProvider implements GenerationProvider {
         const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
         try {
-          const response = await fetchImpl(`${endpoint}${routePath}`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${this.options.token}`,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              Connection: "close"
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          });
+          let responseStatus: number;
+          let responseHeaders: Headers | undefined;
+          let rawBody: string;
 
-          const rawBody = await response.text();
+          try {
+            const response = await fetchImpl(`${endpoint}${routePath}`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${this.options.token}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                Connection: "close"
+              },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            });
+
+            responseStatus = response.status;
+            responseHeaders = response.headers;
+            rawBody = await response.text();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const causeDetails = formatErrorCause(error);
+            const messageWithCause = causeDetails ? `${message} (${causeDetails})` : message;
+
+            if (isTransientNetworkMessage(messageWithCause)) {
+              const curlFallback = await postWithCurlFallback({
+                url: `${endpoint}${routePath}`,
+                token: this.options.token,
+                payload,
+                timeoutMs: requestTimeoutMs
+              });
+
+              if (!curlFallback) {
+                throw error;
+              }
+
+              responseStatus = curlFallback.status;
+              responseHeaders = undefined;
+              rawBody = curlFallback.rawBody;
+            } else {
+              throw error;
+            }
+          }
+
           let parsedBody: unknown;
           let bodyParseError: Error | undefined;
           if (rawBody.trim()) {
@@ -763,16 +908,16 @@ export class ComputeGenerationProvider implements GenerationProvider {
             }
           }
 
-          if (!response.ok) {
+          if (responseStatus < 200 || responseStatus >= 300) {
             const providerMessage = parseProviderErrorMessage(parsedBody);
 
-            if (isUnsupportedRoute(response.status, providerMessage)) {
+            if (isUnsupportedRoute(responseStatus, providerMessage)) {
               lastError = new Error(`Generation route not found at ${routePath}.`);
               unsupportedRoute = true;
               break;
             }
 
-            if (response.status === 401) {
+            if (responseStatus === 401) {
               throw new GenerationProviderRuntimeError(
                 "unauthorized",
                 providerMessage || "Generation request unauthorized. Check token with `og login`.",
@@ -780,7 +925,7 @@ export class ComputeGenerationProvider implements GenerationProvider {
               );
             }
 
-            if (response.status === 403) {
+            if (responseStatus === 403) {
               throw new GenerationProviderRuntimeError(
                 "forbidden",
                 providerMessage || `Generation forbidden for model '${request.model}'. Verify provider permissions and endpoint mapping.`,
@@ -788,8 +933,8 @@ export class ComputeGenerationProvider implements GenerationProvider {
               );
             }
 
-            if (response.status === 429 || isRateLimitMessage(providerMessage)) {
-              const retryAfterSeconds = parseRetryAfterSeconds(response, providerMessage);
+            if (responseStatus === 429 || isRateLimitMessage(providerMessage)) {
+              const retryAfterSeconds = parseRetryAfterSeconds(responseHeaders, providerMessage);
 
               if (attempt < MAX_TRANSIENT_RETRIES) {
                 await sleep(computeRateLimitRetryDelayMs(retryAfterSeconds, attempt));
@@ -812,20 +957,20 @@ export class ComputeGenerationProvider implements GenerationProvider {
               );
             }
 
-            if (response.status >= 500 || response.status === 408) {
+            if (responseStatus >= 500 || responseStatus === 408) {
               if (attempt < MAX_TRANSIENT_RETRIES) {
-                await sleep(computeRetryDelayMs(attempt));
+                await sleep(computeTransientRetryDelayMs(attempt));
                 continue;
               }
 
               throw new GenerationProviderRuntimeError(
                 "provider-unavailable",
-                `${providerMessage || `Provider temporary failure (${response.status}).`} Retry later or use a shorter prompt.`,
+                `${providerMessage || `Provider temporary failure (${responseStatus}).`} Retry later or use a shorter prompt.`,
                 true
               );
             }
 
-            if (response.status === 400 || response.status === 422) {
+            if (responseStatus === 400 || responseStatus === 422) {
               throw new GenerationProviderRuntimeError(
                 "invalid-request",
                 `${providerMessage || "Provider rejected this request as invalid."} No automatic retry was attempted because the request appears invalid.`,
@@ -835,13 +980,13 @@ export class ComputeGenerationProvider implements GenerationProvider {
 
             throw new GenerationProviderRuntimeError(
               "invalid-request",
-              providerMessage || bodyParseError?.message || `Generation request failed with status ${response.status}.`,
+              providerMessage || bodyParseError?.message || `Generation request failed with status ${responseStatus}.`,
               false
             );
           }
 
           if (bodyParseError) {
-            const contentType = response.headers.get("content-type") || "unknown";
+            const contentType = responseHeaders?.get("content-type") || "unknown";
             throw new GenerationProviderRuntimeError(
               "invalid-response",
               `Generation provider returned non-JSON success response (content-type: ${contentType}). Details: ${bodyParseError.message}`,
@@ -885,7 +1030,7 @@ export class ComputeGenerationProvider implements GenerationProvider {
 
           if (error instanceof Error && error.name === "AbortError") {
             if (attempt < MAX_TRANSIENT_RETRIES) {
-              await sleep(computeRetryDelayMs(attempt));
+              await sleep(computeTransientRetryDelayMs(attempt));
               continue;
             }
 
@@ -901,7 +1046,7 @@ export class ComputeGenerationProvider implements GenerationProvider {
           const messageWithCause = causeDetails ? `${message} (${causeDetails})` : message;
 
           if (isTransientNetworkMessage(messageWithCause) && attempt < MAX_TRANSIENT_RETRIES) {
-            await sleep(computeRetryDelayMs(attempt));
+            await sleep(computeNetworkRetryDelayMs(attempt, messageWithCause));
             continue;
           }
 
