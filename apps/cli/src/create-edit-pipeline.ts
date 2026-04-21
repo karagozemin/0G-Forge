@@ -58,6 +58,7 @@ const DEFAULT_FALLBACK_MODEL = "0g-medium";
 const CHAT_COMPLETION_PATHS = ["/chat/completions", "/v1/chat/completions"] as const;
 const INITIAL_RETRY_DELAY_MS = 1200;
 const MAX_RETRY_DELAY_MS = 4000;
+const ALLOW_MOCK_ENDPOINT = /^(1|true|yes|on)$/i.test(process.env.OG_ENABLE_MOCK_MODE?.trim() || "");
 
 function readPositiveIntEnv(
   name: string,
@@ -465,6 +466,16 @@ function isMockEndpoint(endpoint: string): boolean {
   return endpoint.startsWith("mock://");
 }
 
+function assertMockModeAllowed(endpoint: string): void {
+  if (!isMockEndpoint(endpoint) || ALLOW_MOCK_ENDPOINT) {
+    return;
+  }
+
+  throw new Error(
+    `Mock endpoints are disabled by default. Use an http(s) endpoint for real generation. To explicitly enable local mock mode, set OG_ENABLE_MOCK_MODE=1 and retry with '${endpoint || MOCK_COMPUTE_ENDPOINT}'.`
+  );
+}
+
 function parseProviderErrorMessage(payload: unknown): string | undefined {
   if (!payload || typeof payload !== "object") {
     return undefined;
@@ -817,12 +828,13 @@ export class ComputeGenerationProvider implements GenerationProvider {
     const endpoint = this.options.endpoint.trim().replace(/\/+$/, "");
 
     if (isMockEndpoint(endpoint)) {
+      assertMockModeAllowed(endpoint);
       return createMockPlan(request);
     }
 
     if (!isHttpEndpoint(endpoint)) {
       throw new Error(
-        `Unsupported compute endpoint '${endpoint}'. Use an http(s) endpoint for real generation or '${MOCK_COMPUTE_ENDPOINT}' for mock mode.`
+        `Unsupported compute endpoint '${endpoint}'. Use an http(s) endpoint for real generation.`
       );
     }
 

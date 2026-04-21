@@ -95,20 +95,12 @@ For real proxy demo commands and speaking notes, see `DEMO.md`.
 
 ## How builders use this (practical flow)
 
-### 1) Login
-
-Real proxy mode:
+### 1) Login (real endpoint)
 
 ```bash
 og login \
   --token "$OG_REAL_TOKEN" \
   --endpoint "https://compute-network-4.integratenetwork.work/v1/proxy"
-```
-
-Mock mode (demo-safe fallback):
-
-```bash
-og login --token mock-token --endpoint mock://local
 ```
 
 ### 2) Initialize a project
@@ -146,6 +138,7 @@ og sync push
 ### Notes for first-time users
 
 - If you see timeout/rate-limit errors in real mode, retry or switch to `mock://local` for deterministic demos.
+- If you see timeout/rate-limit errors in real mode, retry with a short cooldown and keep using your real endpoint.
 - `create` and `edit` are easiest to start with `--dry-run` so you can inspect plan and diff output before writing files.
 - Upgrade globally with `npm install -g @kaptan_web3/og-cli@latest`.
 - Remove globally with `npm uninstall -g @kaptan_web3/og-cli`.
@@ -174,7 +167,8 @@ Supported templates: `react-vite`, `nextjs-app`, `static-landing`.
 - metadata sync push/pull via configured sync provider abstraction (default local-file)
 
 **Mock path**
-- when endpoint is `mock://local`, generation uses deterministic local mock planning
+- mock endpoints are disabled by default for end users
+- local mock mode is developer-only opt-in: set `OG_ENABLE_MOCK_MODE=1` before using `mock://local`
 
 ## Current limitations (truthful)
 

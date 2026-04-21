@@ -5,6 +5,7 @@ export const MOCK_COMPUTE_ENDPOINT = "mock://local";
 export const DEFAULT_COMPUTE_ENDPOINT =
   process.env.OG_COMPUTE_ENDPOINT?.trim() || "https://compute.0g.ai";
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const ALLOW_MOCK_ENDPOINT = /^(1|true|yes|on)$/i.test(process.env.OG_ENABLE_MOCK_MODE?.trim() || "");
 
 export type ComputeIdentity = {
   accountId: string;
@@ -62,6 +63,21 @@ function isHttpEndpoint(endpoint: string): boolean {
 
 function isMockEndpoint(endpoint: string): boolean {
   return endpoint.startsWith("mock://");
+}
+
+function assertMockModeAllowed(endpoint: string): void {
+  if (!isMockEndpoint(endpoint)) {
+    return;
+  }
+
+  if (ALLOW_MOCK_ENDPOINT) {
+    return;
+  }
+
+  throw new ComputeProviderError(
+    `Mock endpoints are disabled by default. Use an http(s) endpoint for real integration. To explicitly enable local mock mode, set OG_ENABLE_MOCK_MODE=1 and retry with '${MOCK_COMPUTE_ENDPOINT}'.`,
+    "invalid-endpoint"
+  );
 }
 
 function deriveLocalAccountId(token: string): string {
@@ -192,12 +208,17 @@ export class ComputeClient {
   }
 
   private assertEndpointSupported(endpoint: string): void {
-    if (isHttpEndpoint(endpoint) || isMockEndpoint(endpoint)) {
+    if (isHttpEndpoint(endpoint)) {
+      return;
+    }
+
+    if (isMockEndpoint(endpoint)) {
+      assertMockModeAllowed(endpoint);
       return;
     }
 
     throw new ComputeProviderError(
-      `Unsupported compute endpoint '${endpoint}'. Use an http(s) endpoint for real integration or '${MOCK_COMPUTE_ENDPOINT}' for local mock mode.`,
+      `Unsupported compute endpoint '${endpoint}'. Use an http(s) endpoint for real integration.`,
       "invalid-endpoint"
     );
   }
@@ -350,6 +371,7 @@ export class ComputeClient {
     this.assertEndpointSupported(endpoint);
 
     if (isMockEndpoint(endpoint)) {
+      assertMockModeAllowed(endpoint);
       return {
         accountId: auth.accountId ?? deriveLocalAccountId(auth.token),
         endpoint,
