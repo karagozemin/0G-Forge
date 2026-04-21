@@ -1,6 +1,6 @@
 {
   "name": "@kaptan_web3/og-cli",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Terminal-native companion for building and shipping 0G app MVPs.",
   "private": false,
   "type": "module",
