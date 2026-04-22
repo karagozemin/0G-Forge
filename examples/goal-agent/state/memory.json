@@ -1,0 +1,81 @@
+{
+  "history": [
+    {
+      "timestamp": "2026-04-22T20:35:39.110Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T20:37:23.584Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:04:09.387Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:04:10.008Z",
+      "goal": "Improve accessibility by increasing color contrast and focus states.",
+      "mode": "edit",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:04:10.630Z",
+      "goal": "Add a short feature list section below the hero area.",
+      "mode": "edit",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:08.190Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:08.321Z",
+      "goal": "Improve accessibility by increasing color contrast and focus states.",
+      "mode": "edit",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:08.456Z",
+      "goal": "Add a short feature list section below the hero area.",
+      "mode": "edit",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:09.213Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:09.345Z",
+      "goal": "Improve accessibility by increasing color contrast and focus states.",
+      "mode": "edit",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-04-22T21:06:09.477Z",
+      "goal": "Add a short feature list section below the hero area.",
+      "mode": "edit",
+      "apply": true,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    }
+  ]
+}

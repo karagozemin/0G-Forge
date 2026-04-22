@@ -1,0 +1,15 @@
+{
+  "name": "@examples/goal-agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Autonomous goal-loop agent example built on top of 0G Forge CLI.",
+  "scripts": {
+    "start": "node ./src/agent.mjs",
+    "run:apply": "node ./src/agent.mjs --apply",
+    "smoke": "node ./src/agent.mjs --max-steps 1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

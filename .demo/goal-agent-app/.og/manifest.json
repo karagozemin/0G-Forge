@@ -1,0 +1,8 @@
+{
+  "projectName": "goal-agent-app",
+  "template": "react-vite",
+  "defaultModel": "0g-medium",
+  "createdAt": "2026-04-22T20:35:57.359Z",
+  "deployTarget": "vercel",
+  "syncEnabled": false
+}

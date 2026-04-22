@@ -194,6 +194,8 @@ scripts/demo-flow.sh   # reproducible short demo runner
 
 - `DEMO.md`: exact live demo sequence (real + fallback)
 - `SHOWCASE.md`: concise judge-facing snapshot (what works, limits, value)
+- `HACKATHON_SUBMISSION.md`: dual-track submission checklist and payload template
+- `examples/goal-agent/`: working autonomous agent example built on top of `og`
 
 ## Validation commands
 

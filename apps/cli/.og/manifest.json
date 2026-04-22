@@ -1,0 +1,8 @@
+{
+  "projectName": "cli",
+  "template": "react-vite",
+  "defaultModel": "0g-medium",
+  "createdAt": "2026-04-22T21:04:09.378Z",
+  "deployTarget": "vercel",
+  "syncEnabled": false
+}
