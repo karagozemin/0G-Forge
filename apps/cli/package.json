@@ -1,7 +1,14 @@
 {
   "name": "@kaptan_web3/og-cli",
-  "version": "0.1.6",
+  "version": "0.1.11",
   "description": "Terminal-native companion for building and shipping 0G app MVPs.",
+  "keywords": [
+    "0g",
+    "cli",
+    "app-builder",
+    "scaffolding",
+    "vercel"
+  ],
   "private": false,
   "type": "module",
   "main": "dist/index.cjs",
