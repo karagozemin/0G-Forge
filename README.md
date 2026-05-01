@@ -36,6 +36,7 @@
 
 ```
 packages/
+  forge-agent/       # Agent runtime — AgentLoop, ToolRegistry, MemoryLayer (NEW)
   core/              # .og manifest + history schema
   compute-client/    # 0G Compute auth + model client
   storage/           # SyncProvider interface + local-file provider
@@ -46,10 +47,48 @@ apps/
 contracts/
   FrameworkRegistry  # Solidity — deployed on 0G Chain testnet
 examples/
-  goal-agent/        # Autonomous agent built on og framework
+  goal-agent/        # Autonomous agent built on forge-agent runtime
     src/agent.mjs        # basic agent (mock mode)
-    src/agent-0g.mjs     # 0G-native agent (Storage + Chain + reflection)
+    src/agent-0g.mjs     # 0G-native agent using forge-agent framework
 ```
+
+## forge-agent Runtime (`packages/forge-agent/`)
+
+The core framework primitive — a ZeroClaw-style agent runtime built natively on 0G.
+
+```typescript
+import { AgentLoop, ToolRegistry, MemoryLayer, createLocalMemoryBackend } from "@og/forge-agent";
+import { createOgCreateTool, createOgEditTool, createOgSyncTool } from "@og/forge-agent";
+
+const registry = new ToolRegistry()
+  .register(createOgCreateTool({ cliEntry, tsxBin, projectDir, apply: true }))
+  .register(createOgEditTool({ cliEntry, tsxBin, projectDir, apply: true }))
+  .register(createOgSyncTool({ cliEntry, tsxBin, projectDir }));
+
+const memory = new MemoryLayer(createLocalMemoryBackend("./state.json"), "my-agent");
+
+const loop = new AgentLoop({
+  registry,
+  memory,
+  maxRetries: 2,
+  onStepEnd(reflection) {
+    console.log(`${reflection.decision}: ${reflection.goal}`);
+  }
+});
+
+loop
+  .addGoal("Create a landing page with hero section", "og:create")
+  .addGoal("Improve accessibility and contrast", "og:edit")
+  .addGoal("Add feature list below hero", "og:edit");
+
+const result = await loop.run();
+// { goalsCompleted: 3, goalsSkipped: 0, reflections: [...] }
+```
+
+Three extensible primitives:
+- **`AgentLoop`** — goal execution engine with reflection (continue / retry / skip / abort)
+- **`ToolRegistry`** — register any tool; built-ins wrap `og create`, `og edit`, `og sync`
+- **`MemoryLayer`** — read/write/append agent state; backend-agnostic (local file or 0G Storage)
 
 ## Install
 

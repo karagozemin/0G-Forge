@@ -3,11 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Autonomous goal-loop agent example built on top of 0G Forge CLI.",
+  "description": "Autonomous goal-loop agent example built on the forge-agent runtime and 0G Forge CLI.",
   "scripts": {
     "start": "node ./src/agent.mjs",
-    "run:apply": "node ./src/agent.mjs --apply",
-    "smoke": "node ./src/agent.mjs --max-steps 1"
+    "start:0g": "tsx ./src/agent-0g.mjs",
+    "start:0g:apply": "tsx ./src/agent-0g.mjs --apply",
+    "smoke": "node ./src/agent.mjs --max-steps 1",
+    "smoke:0g": "tsx ./src/agent-0g.mjs --max-steps 1"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1"
   },
   "engines": {
     "node": ">=18"

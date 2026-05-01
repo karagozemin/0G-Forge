@@ -11,9 +11,14 @@
 
 0G Forge is a **ZeroClaw-style framework alternative** built natively on 0G. Where OpenClaw provides autonomous agent execution loops, 0G Forge provides the **code-generation and deployment substrate** — a framework primitive that agent builders use to autonomously scaffold, modify, and ship on-chain AI apps.
 
-The framework exposes two core extensibility interfaces that any agent can program against:
-- **`GenerationProvider`** — swap in any 0G Compute model (GLM-5.1, DeepSeek-27B, etc.) for the plan/diff/apply code generation pipeline
-- **`SyncProvider`** — swap in 0G Storage (log layer), local-file, or HTTP as the persistent memory backend
+The framework exposes three core primitives in `packages/forge-agent/` that any agent can program against:
+- **`AgentLoop`** — goal execution engine with built-in reflection (continue / retry / skip / abort)
+- **`ToolRegistry`** — register any tool; built-ins wrap `og create`, `og edit`, `og sync push`
+- **`MemoryLayer`** — backend-agnostic agent state (local file or 0G Storage)
+
+Lower-level extensibility interfaces:
+- **`GenerationProvider`** — swap in any 0G Compute model (GLM-5.1, DeepSeek-27B, etc.) for the plan/diff/apply pipeline
+- **`SyncProvider`** — swap in 0G Storage (log layer), local-file, or HTTP as the memory backend
 
 The included `goal-agent` (`examples/goal-agent/src/agent-0g.mjs`) is a working autonomous agent built **on top of** this framework: it runs multi-step goals, applies a reflection loop (continue / retry / skip), persists memory to 0G Storage, and registers itself on 0G Chain — exactly the kind of agent that Track 1 infrastructure is designed to enable.
 
