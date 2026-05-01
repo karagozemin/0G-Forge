@@ -38,7 +38,7 @@ Activated with: `OG_STORAGE_ENABLED=1`
 
 ### On-Chain Registry (`contracts/FrameworkRegistry.sol`)
 
-Deployed on 0G Chain (EVM-compatible, chainId 16600):
+Deployed on 0G Chain (EVM-compatible, chainId 16602):
 - `registerFramework(name, version, repoUrl)` — publishes framework entries on-chain
 - `setSyncHash(projectKey, fileHash)` — stores latest 0G Storage pointer per project
 - `getSyncHash(projectKey)` — reads pointer for sync pull
@@ -85,7 +85,7 @@ examples/goal-agent/src/agent-0g.mjs
 ## Submission Checklist
 
 - [x] Project name + short description
-- [ ] **Contract deployment addresses** ← deploy with `cd contracts && npm run deploy:testnet`
+- [x] **Contract deployment addresses** — `0x495F79138BEc9c6241eC2fAC1524AB3e9214832E` (Galileo, chainId 16602)
 - [x] Public GitHub repo with README + setup instructions
 - [ ] Demo video (<3 minutes) ← record with `./scripts/demo-flow.sh`
 - [ ] Live demo link

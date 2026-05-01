@@ -1,3 +1,6 @@
+import { tmpdir } from "node:os";
+import { readFile, rm } from "node:fs/promises";
+import path from "node:path";
 import { ethers } from "ethers";
 import {
   type SyncPayload,
@@ -7,6 +10,10 @@ import {
 } from "@og/storage";
 
 export const ZEROG_SYNC_PROVIDER_NAME = "0g-storage";
+
+// 0G Galileo Testnet (chainId 16602)
+const DEFAULT_EVM_RPC = "https://evmrpc-testnet.0g.ai";
+const DEFAULT_INDEXER_RPC = "https://indexer-storage-testnet-standard.0g.ai";
 
 const FRAMEWORK_REGISTRY_ABI = [
   "function setSyncHash(string calldata projectKey, string calldata fileHash) external",
@@ -21,14 +28,11 @@ export type ZeroGSyncProviderOptions = {
 };
 
 function resolveOptions(): ZeroGSyncProviderOptions {
-  const indexerRpc = process.env.OG_STORAGE_INDEXER_RPC?.trim();
-  const evmRpc = process.env.OG_EVM_RPC?.trim() || "https://evmrpc-testnet.0g.ai"; // 0G Galileo Testnet (chainId 16602)
+  const indexerRpc = process.env.OG_STORAGE_INDEXER_RPC?.trim() || DEFAULT_INDEXER_RPC;
+  const evmRpc = process.env.OG_EVM_RPC?.trim() || DEFAULT_EVM_RPC;
   const privateKey = process.env.OG_PRIVATE_KEY?.trim();
   const contractAddress = process.env.OG_REGISTRY_CONTRACT?.trim();
 
-  if (!indexerRpc) {
-    throw new Error("OG_STORAGE_INDEXER_RPC is required for 0G Storage sync provider.");
-  }
   if (!privateKey) {
     throw new Error("OG_PRIVATE_KEY is required for 0G Storage sync provider.");
   }
@@ -51,36 +55,44 @@ async function uploadToZeroG(
   const raw = Buffer.from(JSON.stringify(payload), "utf8");
   const memData = new MemData(raw);
 
-  const [tree, treeErr] = await memData.merkleTree();
-  if (treeErr !== null) {
-    throw new Error(`Failed to compute 0G Storage merkle tree: ${treeErr.message}`);
-  }
-
-  const fileHash = tree.rootHash();
-
   const indexer = new Indexer(options.indexerRpc);
-  const [, uploadErr] = await indexer.upload(memData, 0, signer);
+
+  // upload(file, evmRpc, signer) — returns [tx, error]
+  const [tx, uploadErr] = await indexer.upload(memData, options.evmRpc, signer);
   if (uploadErr !== null) {
-    throw new Error(`Failed to upload to 0G Storage: ${uploadErr.message}`);
+    throw new Error(`Failed to upload to 0G Storage: ${String(uploadErr)}`);
   }
 
-  return fileHash;
+  // tx contains rootHash after upload
+  const rootHash = (tx as { rootHash?: string }).rootHash;
+  if (!rootHash) {
+    throw new Error("0G Storage upload succeeded but returned no rootHash.");
+  }
+
+  return rootHash;
 }
 
 async function downloadFromZeroG(
-  fileHash: string,
+  rootHash: string,
   options: ZeroGSyncProviderOptions
 ): Promise<SyncPayload> {
   const { Indexer } = await import("@0glabs/0g-ts-sdk");
 
   const indexer = new Indexer(options.indexerRpc);
-  const [data, err] = await indexer.download(fileHash, options.indexerRpc, true);
+
+  // download(rootHash, outputPath, withProof) — writes to file, returns error
+  const tmpFile = path.join(tmpdir(), `og-sync-${Date.now()}.json`);
+  const err = await indexer.download(rootHash, tmpFile, true);
   if (err !== null) {
-    throw new Error(`Failed to download from 0G Storage: ${err.message}`);
+    throw new Error(`Failed to download from 0G Storage: ${String(err)}`);
   }
 
-  const raw = Buffer.from(data as Uint8Array).toString("utf8");
-  return validateSyncPayload(JSON.parse(raw) as unknown);
+  try {
+    const raw = await readFile(tmpFile, "utf8");
+    return validateSyncPayload(JSON.parse(raw) as unknown);
+  } finally {
+    await rm(tmpFile, { force: true });
+  }
 }
 
 async function storeHashOnChain(
@@ -91,7 +103,7 @@ async function storeHashOnChain(
   const provider = new ethers.JsonRpcProvider(options.evmRpc);
   const signer = new ethers.Wallet(options.privateKey, provider);
   const contract = new ethers.Contract(options.contractAddress, FRAMEWORK_REGISTRY_ABI, signer);
-  const tx = await (contract.setSyncHash as (k: string, h: string) => Promise<ethers.ContractTransactionResponse>)(projectKey, fileHash);
+  const tx = await (contract["setSyncHash"] as (k: string, h: string) => Promise<ethers.ContractTransactionResponse>)(projectKey, fileHash);
   await tx.wait();
 }
 
@@ -101,7 +113,7 @@ async function readHashFromChain(
 ): Promise<string | null> {
   const provider = new ethers.JsonRpcProvider(options.evmRpc);
   const contract = new ethers.Contract(options.contractAddress, FRAMEWORK_REGISTRY_ABI, provider);
-  const hash = await (contract.getSyncHash as (k: string) => Promise<string>)(projectKey);
+  const hash = await (contract["getSyncHash"] as (k: string) => Promise<string>)(projectKey);
   return hash && hash.length > 0 ? hash : null;
 }
 
