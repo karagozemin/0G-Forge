@@ -105,7 +105,7 @@ examples/goal-agent/src/agent-0g.mjs
 - [ ] Demo video (<3 minutes) ← record with `./scripts/demo-flow.sh`
 - [ ] Live demo link
 - [x] Protocol features / SDKs explained (table above)
-- [ ] Team member names + contact info (Telegram, X)
+- [x] Team member names + contact info — 0G-Forge | Telegram: @kaptan_web3 | X: @kaptan_web3
 - [x] Working example agent (`examples/goal-agent/src/agent-0g.mjs`)
 - [x] Architecture diagram (above + `examples/goal-agent/ARCHITECTURE.md`)
 
@@ -164,8 +164,8 @@ Contract deployment addresses:
 
 GitHub: https://github.com/karagozemin/0g-forge
 Demo video: TBD
-Live demo: TBD
+Live demo: https://0g-forge.vercel.app
 
 Team:
-- TBD (Telegram: @TBD, X: @TBD)
+- 0G-Forge (Telegram: @kaptan_web3, X: @kaptan_web3)
 ```
