@@ -18,6 +18,7 @@ import {
   type SyncProviderInfo,
   validateSyncPayload
 } from "@og/storage";
+import { createZeroGSyncProvider } from "@og/storage-0g";
 import {
   OG_PROJECT_MANIFEST_MISSING_MESSAGE,
   OG_PROJECT_NOT_FOUND_MESSAGE,
@@ -244,7 +245,13 @@ function mergeHistoryEntries(
 }
 
 function createSyncProvider(customProvider?: SyncProvider): SyncProvider {
-  return customProvider ?? createLocalFileSyncProvider();
+  if (customProvider) return customProvider;
+
+  if (/^(1|true|yes|on)$/i.test(process.env.OG_STORAGE_ENABLED?.trim() || "")) {
+    return createZeroGSyncProvider();
+  }
+
+  return createLocalFileSyncProvider();
 }
 
 function getArtifactMetaPath(projectDir: string): string {

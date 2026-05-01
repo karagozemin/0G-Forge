@@ -1,81 +1,170 @@
 <div align="center">
   <h1>0G Forge</h1>
   <img src="./public/0G-Forge-Logo.jpeg" alt="0G Forge Logo" width="200" />
-  
 
-  <p><strong>0G Forge</strong> is a terminal-native companion for the 0G app workflow: prompt-driven project changes, local preview, Vercel deploy, and lightweight sync metadata.</p>
-  
-  <p>This repository is a working MVP focused on builder workflow speed and inspectability from the terminal.</p>
+  <p><strong>0G Forge</strong> is a terminal-native agent framework and CLI for building, previewing, and deploying AI-generated apps on the 0G stack — powered by 0G Compute for inference, 0G Storage for persistent memory, and 0G Chain for on-chain registration.</p>
 </div>
 
-## Install (Public npm)
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Developer / Agent                  │
+└─────────────────────┬───────────────────────────────┘
+                      │  og CLI commands
+                      ▼
+┌─────────────────────────────────────────────────────┐
+│                  0G Forge CLI (og)                   │
+│  og init │ og create │ og edit │ og preview          │
+│  og deploy vercel │ og sync push/pull                │
+│  og login │ og model list/use                        │
+└──────┬─────────────────┬───────────────────┬────────┘
+       │                 │                   │
+       ▼                 ▼                   ▼
+┌──────────────┐ ┌──────────────┐  ┌─────────────────┐
+│  0G Compute  │ │  0G Storage  │  │    0G Chain      │
+│  Network     │ │  (Indexer +  │  │  FrameworkReg.  │
+│  (inference) │ │   KV Layer)  │  │  (EVM contract) │
+└──────────────┘ └──────────────┘  └─────────────────┘
+       │                 │                   │
+       ▼                 ▼                   ▼
+ Plan + Diff       Sync metadata        On-chain
+ generation        across machines      framework entry
+```
+
+```
+packages/
+  core/              # .og manifest + history schema
+  compute-client/    # 0G Compute auth + model client
+  storage/           # SyncProvider interface + local-file provider
+  storage-0g/        # 0G Storage SyncProvider (Indexer + contract)
+  deploy-vercel/     # Vercel deploy runner
+apps/
+  cli/               # og CLI — all commands wired here
+contracts/
+  FrameworkRegistry  # Solidity — deployed on 0G Chain testnet
+examples/
+  goal-agent/        # Autonomous agent built on og framework
+    src/agent.mjs        # basic agent (mock mode)
+    src/agent-0g.mjs     # 0G-native agent (Storage + Chain + reflection)
+```
+
+## Install
 
 ```bash
 npm install -g @kaptan_web3/og-cli
 og --version
 og --help
 ```
-
-If you see `EEXIST` for `og`:
-
-```bash
-npm uninstall -g @og/cli
-npm install -g @kaptan_web3/og-cli
-```
-
-## 2-minute reviewer overview
-
-**Problem:** builders lose time switching between tools for generation, local run, deploy, and state handoff.
-
-**What this project does:** keeps that loop in one CLI with explicit plan/diff output and actionable runtime messages.
-
-**Implemented today:**
-- auth/session: `og login`, `og logout`, `og whoami`
-- model controls: `og model list`, `og model use <modelId>`
-- project lifecycle: `og init`, `og create`, `og edit`
-- runtime/deploy: `og preview`, `og deploy vercel`
-- metadata handoff: `og sync push`, `og sync pull`
-
-## Submission framing (judge/hackathon)
-
-**What is unique here**
-- terminal-first, prompt-to-app flow with plan/diff before apply
-- real proxy-compatible generation path + deterministic mock fallback
-- deploy + lightweight sync included in the same command surface
-
-**Why it matters for builders**
-- shortens idea-to-running-app iteration in terminal
-- keeps generated changes inspectable and controlled
-- keeps project state portable without introducing heavy infra
-
-**Why it fits 0G / 0G App**
-- integrates with OpenAI-compatible 0G compute proxy endpoints
-- stays focused on practical app-building and shipping workflows
 
 ## Quick start
 
-### Prerequisites
-- Node.js
-- npm
-- `pnpm` (only if you want to run from source)
-- `vercel` CLI (for deploy commands)
-
-### Install globally from npm (recommended)
+### 1) Login with 0G Compute credentials
 
 ```bash
-npm install -g @kaptan_web3/og-cli
-og --version
-og --help
+og login \
+  --token "$OG_COMPUTE_TOKEN" \
+  --endpoint "https://compute.0g.ai"
 ```
 
-If you see `EEXIST` for `og`, remove the old global package and reinstall:
+### 2) Init a project
 
 ```bash
-npm uninstall -g @og/cli
-npm install -g @kaptan_web3/og-cli
+og init --template react-vite --dir ./my-app --yes
+cd ./my-app && pnpm install
 ```
 
-### Run from source (contributors)
+### 3) Generate from a prompt
+
+```bash
+og create --prompt "Add a hero section with gradient background" --dry-run
+og create --prompt "Add a hero section with gradient background" --yes
+```
+
+### 4) Edit → preview → deploy
+
+```bash
+og edit --prompt "Improve CTA contrast and add mobile nav" --yes
+og preview
+og deploy vercel --yes
+```
+
+### 5) Sync metadata to 0G Storage
+
+```bash
+# Set env vars (see .env.example in contracts/)
+export OG_STORAGE_ENABLED=1
+export OG_STORAGE_INDEXER_RPC=https://indexer-storage-testnet-standard.0g.ai
+export OG_PRIVATE_KEY=<your_key>
+export OG_REGISTRY_CONTRACT=<deployed_contract_address>
+
+og sync push   # uploads payload to 0G Storage, stores hash on 0G Chain
+og sync pull   # reads hash from chain, downloads from 0G Storage
+```
+
+## 0G Protocol Integration
+
+| Component | Usage |
+|---|---|
+| **0G Compute Network** | AI inference for `og create` / `og edit` — OpenAI-compatible `/v1/chat/completions` |
+| **0G Storage (Indexer)** | `og sync push/pull` stores project metadata as files on 0G Storage network |
+| **0G Chain (EVM)** | `FrameworkRegistry` contract stores latest sync hash per project + framework registration |
+
+## Goal Agent — Autonomous example
+
+The goal agent (`examples/goal-agent/`) is a working autonomous agent built **on top of** the og framework. It demonstrates how developers can use og as an agent substrate.
+
+```bash
+# Basic (mock mode)
+node examples/goal-agent/src/agent.mjs --apply
+
+# 0G-native (uses 0G Storage memory + 0G Chain registration + reflection loop)
+OG_STORAGE_ENABLED=1 \
+OG_STORAGE_INDEXER_RPC=<rpc> \
+OG_PRIVATE_KEY=<key> \
+OG_REGISTRY_CONTRACT=<address> \
+node examples/goal-agent/src/agent-0g.mjs --apply --max-steps 3
+```
+
+What the 0G-native agent does:
+- Reads goal list
+- Runs `og create` / `og edit` for each goal
+- **Reflection loop**: evaluates each step result before continuing (retry / skip / continue)
+- Writes memory to 0G Storage after each step
+- Registers itself on 0G Chain via `FrameworkRegistry`
+
+## Contract Deployment (0G Chain)
+
+```bash
+cd contracts
+npm install
+cp .env.example .env  # fill in OG_PRIVATE_KEY
+npm run deploy:testnet
+```
+
+The deploy script also registers "0G Forge" on-chain automatically.
+
+**Deployed contract:** see `HACKATHON_SUBMISSION.md` for the live address.
+
+## Environment variables
+
+```bash
+# 0G Compute (required for real generation)
+OG_COMPUTE_TOKEN=          # your compute API token
+OG_COMPUTE_ENDPOINT=       # default: https://compute.0g.ai
+
+# 0G Storage sync (optional, enables decentralized sync)
+OG_STORAGE_ENABLED=1
+OG_STORAGE_INDEXER_RPC=    # e.g. https://indexer-storage-testnet-standard.0g.ai
+OG_EVM_RPC=                # default: https://evmrpc-testnet.0g.ai
+OG_PRIVATE_KEY=            # wallet key for signing storage + chain txs
+OG_REGISTRY_CONTRACT=      # deployed FrameworkRegistry address
+
+# Developer mock mode (local testing only)
+OG_ENABLE_MOCK_MODE=1      # enables mock://local endpoint
+```
+
+## Run from source
 
 ```bash
 git clone <repo-url>
@@ -85,65 +174,35 @@ pnpm build
 pnpm --filter @og/cli run dev --help
 ```
 
-### 60–120 second demo
+## Validation
 
 ```bash
-./scripts/demo-flow.sh --mode mock
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
-For real proxy demo commands and speaking notes, see `DEMO.md`.
+## Repository map
 
-## How builders use this (practical flow)
-
-### 1) Login (real endpoint)
-
-```bash
-og login \
-  --token "$OG_REAL_TOKEN" \
-  --endpoint "https://compute-network-4.integratenetwork.work/v1/proxy"
+```text
+apps/cli/              # CLI — all og commands
+packages/core/         # .og state (manifest, history)
+packages/compute-client/ # 0G Compute auth + model client
+packages/storage/      # SyncProvider interface + local-file provider
+packages/storage-0g/   # 0G Storage SyncProvider (NEW)
+packages/deploy-vercel/ # Vercel deploy runner
+contracts/             # FrameworkRegistry.sol — 0G Chain (NEW)
+examples/goal-agent/   # Autonomous agent example
+  src/agent.mjs        # basic version (mock)
+  src/agent-0g.mjs     # 0G-native version with reflection (NEW)
+scripts/demo-flow.sh   # reproducible demo runner
 ```
 
-### 2) Initialize a project
+## Supported templates
 
-```bash
-og init --template react-vite --dir ./my-app --yes
-cd ./my-app
-pnpm install
-```
+`react-vite` · `nextjs-app` · `static-landing`
 
-### 3) Generate changes from a prompt (safe first run)
-
-```bash
-og create \
-  --prompt "Add a hero section" \
-  --dry-run \
-  --yes
-```
-
-### 4) Apply and iterate
-
-```bash
-og create --prompt "Add a hero section" --yes
-og edit --prompt "Improve spacing and CTA contrast" --dry-run --yes
-```
-
-### 5) Preview, deploy, sync
-
-```bash
-og preview --port 4173
-og deploy vercel --yes
-og sync push
-```
-
-### Notes for first-time users
-
-- If you see timeout/rate-limit errors in real mode, retry or switch to `mock://local` for deterministic demos.
-- If you see timeout/rate-limit errors in real mode, retry with a short cooldown and keep using your real endpoint.
-- `create` and `edit` are easiest to start with `--dry-run` so you can inspect plan and diff output before writing files.
-- Upgrade globally with `npm install -g @kaptan_web3/og-cli@latest`.
-- Remove globally with `npm uninstall -g @kaptan_web3/og-cli`.
-
-## Core command surface (MVP)
+## Commands
 
 ```text
 og login / logout / whoami
@@ -153,54 +212,5 @@ og create / og edit
 og preview
 og deploy vercel
 og sync push / og sync pull
-```
-
-Supported templates: `react-vite`, `nextjs-app`, `static-landing`.
-
-## Real vs mock boundaries
-
-**Real path**
-- auth and identity validation against real proxy endpoint
-- generation requests to OpenAI-compatible proxy routes
-- local preview execution
-- Vercel deployment flow
-- metadata sync push/pull via configured sync provider abstraction (default local-file)
-
-**Mock path**
-- mock endpoints are disabled by default for end users
-- local mock mode is developer-only opt-in: set `OG_ENABLE_MOCK_MODE=1` before using `mock://local`
-
-## Current limitations (truthful)
-
-During real provider usage, generation calls may intermittently fail due to upstream capacity conditions (for example `429` rate limits, concurrent request caps, timeout windows, or transient socket closes). The CLI now includes bounded retries and clearer diagnostics, but end-to-end success still depends on live provider availability at request time.
-
-- Real-provider generation can still fail due to timeout/rate limits.
-- Deploy target is Vercel only.
-- Sync is lightweight metadata sync, not full project backup/restore.
-- Template set is intentionally narrow.
-
-## Repository map
-
-```text
-apps/cli/              # CLI implementation, packaging, runtime wiring
-packages/core/         # .og state schema/helpers
-packages/compute-client/ # auth + model/endpoint client
-packages/storage/      # sync provider abstraction + local-file provider
-templates/             # starter templates copied by `og init`
-scripts/demo-flow.sh   # reproducible short demo runner
-```
-
-## Where reviewers should look next
-
-- `DEMO.md`: exact live demo sequence (real + fallback)
-- `SHOWCASE.md`: concise judge-facing snapshot (what works, limits, value)
-- `HACKATHON_SUBMISSION.md`: dual-track submission checklist and payload template
-- `examples/goal-agent/`: working autonomous agent example built on top of `og`
-
-## Validation commands
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm build
+og doctor
 ```
