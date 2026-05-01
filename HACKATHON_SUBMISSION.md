@@ -7,6 +7,16 @@
 - **One-liner:** Terminal-native agent framework that lets developers build, preview, and deploy AI-generated apps using 0G Compute for inference, 0G Storage for persistent memory, and 0G Chain for on-chain framework registration.
 - **Repo:** https://github.com/karagozemin/0g-forge
 
+## Framework Positioning
+
+0G Forge is a **ZeroClaw-style framework alternative** built natively on 0G. Where OpenClaw provides autonomous agent execution loops, 0G Forge provides the **code-generation and deployment substrate** — a framework primitive that agent builders use to autonomously scaffold, modify, and ship on-chain AI apps.
+
+The framework exposes two core extensibility interfaces that any agent can program against:
+- **`GenerationProvider`** — swap in any 0G Compute model (GLM-5.1, DeepSeek-27B, etc.) for the plan/diff/apply code generation pipeline
+- **`SyncProvider`** — swap in 0G Storage (log layer), local-file, or HTTP as the persistent memory backend
+
+The included `goal-agent` (`examples/goal-agent/src/agent-0g.mjs`) is a working autonomous agent built **on top of** this framework: it runs multi-step goals, applies a reflection loop (continue / retry / skip), persists memory to 0G Storage, and registers itself on 0G Chain — exactly the kind of agent that Track 1 infrastructure is designed to enable.
+
 ## Protocol Features & SDKs Used
 
 | Feature | How It's Used | Code Reference |
@@ -128,12 +138,16 @@ Project name: 0G Forge
 Track: Best Agent Framework, Tooling & Core Extensions
 
 Short description:
-0G Forge is a terminal-native agent framework and CLI for prompt-driven
-app creation on the 0G stack. Developers use `og create/edit/deploy/sync`
-to build AI-generated apps powered by 0G Compute inference, persist
-metadata to 0G Storage, and register framework entries on 0G Chain.
-The included goal agent demonstrates autonomous multi-step app building
-with reflection loops and cross-machine memory via 0G Storage.
+0G Forge is a ZeroClaw-style agent framework and CLI that provides the
+code-generation and deployment substrate for building on-chain AI apps.
+Developers and autonomous agents use `og create/edit/deploy/sync` to
+scaffold, modify, and ship apps — powered by 0G Compute inference,
+0G Storage for persistent cross-machine memory, and 0G Chain for
+on-chain framework registration. The framework exposes two extensible
+interfaces (GenerationProvider, SyncProvider) so any agent can swap in
+different 0G Compute models or memory backends. The included goal agent
+demonstrates autonomous multi-step app building with reflection loops
+(continue/retry/skip) and persistent memory via 0G Storage.
 
 Protocol features used:
 - 0G Compute Network: all AI inference (og create / og edit)

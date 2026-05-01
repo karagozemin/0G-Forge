@@ -3,6 +3,8 @@
   <img src="./public/0G-Forge-Logo.jpeg" alt="0G Forge Logo" width="200" />
 
   <p><strong>0G Forge</strong> is a terminal-native agent framework and CLI for building, previewing, and deploying AI-generated apps on the 0G stack — powered by 0G Compute for inference, 0G Storage for persistent memory, and 0G Chain for on-chain registration.</p>
+
+  <p>0G Forge serves as a <strong>ZeroClaw-style framework alternative</strong>: where OpenClaw provides autonomous agent execution loops, 0G Forge provides the code-generation and deployment substrate — a framework primitive that agent builders can use to autonomously scaffold, modify, and ship on-chain AI apps using 0G Compute + Storage.</p>
 </div>
 
 ## Architecture
