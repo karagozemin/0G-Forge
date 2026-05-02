@@ -1,0 +1,8 @@
+{
+  "projectName": "0G",
+  "template": "react-vite",
+  "defaultModel": "0g-medium",
+  "createdAt": "2026-05-02T00:58:26.026Z",
+  "deployTarget": "vercel",
+  "syncEnabled": false
+}
