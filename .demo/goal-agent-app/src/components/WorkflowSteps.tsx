@@ -1,4 +1,4 @@
-import { CloudCog, Diff, Eye, KeyRound, Rocket, Sparkles } from "lucide-react";
+import { Bot, CloudCog, Diff, Eye, KeyRound, Rocket, Sparkles } from "lucide-react";
 
 const workflow = [
   { title: "Login", detail: "Authenticate with 0G Compute proxy", icon: KeyRound },
@@ -6,7 +6,8 @@ const workflow = [
   { title: "Prompt", detail: "Create or edit via CLI prompt", icon: Diff },
   { title: "Preview", detail: "Run locally and inspect output", icon: Eye },
   { title: "Deploy", detail: "Ship to Vercel from terminal", icon: Rocket },
-  { title: "Sync", detail: "Push lightweight project metadata", icon: CloudCog }
+  { title: "Sync", detail: "Push metadata to 0G Storage, hash to 0G Chain", icon: CloudCog },
+  { title: "Agent Loop", detail: "Run autonomous goals with reflection (continue / retry / skip)", icon: Bot }
 ];
 
 export function WorkflowSteps() {

@@ -2,6 +2,7 @@ const DOCS_URL = "https://github.com/karagozemin/0G-Forge";
 
 const navItems = [
   { label: "How to Use", href: "#how-to-use" },
+  { label: "Framework", href: "#framework" },
   { label: "Workflow", href: "#workflow" },
   { label: "Features", href: "#features" },
   { label: "Trust", href: "#trust" },

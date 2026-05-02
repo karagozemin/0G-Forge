@@ -1,13 +1,31 @@
 import {
+  Bot,
   Cloud,
+  Database,
   FileDiff,
   FolderGit2,
+  Link2,
   PlugZap,
   ServerCog,
   Terminal
 } from "lucide-react";
 
 const features = [
+  {
+    title: "forge-agent Runtime",
+    detail: "AgentLoop, ToolRegistry, and MemoryLayer — a ZeroClaw-style framework for autonomous goal execution with reflection loops.",
+    icon: Bot
+  },
+  {
+    title: "0G Storage Sync",
+    detail: "og sync push/pull stores project metadata and agent memory on the 0G Storage network — persistent across machines.",
+    icon: Database
+  },
+  {
+    title: "0G Chain Registry",
+    detail: "FrameworkRegistry contract on Galileo Testnet stores sync hashes and framework entries on-chain (chainId 16602).",
+    icon: Link2
+  },
   {
     title: "Prompt-to-app workflow",
     detail: "Run prompt-driven create/edit directly from your shell, not a separate dashboard.",
@@ -19,8 +37,8 @@ const features = [
     icon: FileDiff
   },
   {
-    title: "Real 0G proxy integration",
-    detail: "Use OpenAI-compatible 0G Compute proxy endpoints for real generation paths.",
+    title: "Real 0G Compute integration",
+    detail: "Use OpenAI-compatible 0G Compute endpoints for real inference on every og create / og edit call.",
     icon: PlugZap
   },
   {
@@ -34,8 +52,8 @@ const features = [
     icon: Cloud
   },
   {
-    title: "Lightweight sync + local state",
-    detail: "Keep `.og` metadata and artifact context portable across environments.",
+    title: "Portable project state",
+    detail: "Keep `.og` manifest and sync metadata portable across environments via 0G Storage.",
     icon: FolderGit2
   }
 ];
