@@ -76,6 +76,13 @@
       "mode": "edit",
       "apply": true,
       "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
+    },
+    {
+      "timestamp": "2026-05-02T01:30:25.258Z",
+      "goal": "Create a landing page with headline, subtext, and CTA button.",
+      "mode": "create",
+      "apply": false,
+      "projectDir": "/Users/eminkaragoz/Desktop/projects/0G/.demo/goal-agent-app"
     }
   ]
 }

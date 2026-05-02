@@ -1,3 +1,4 @@
+// LEGACY: basic mock-only agent. Use agent-0g.mjs (forge-agent runtime) instead.
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

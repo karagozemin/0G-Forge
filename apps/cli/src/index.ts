@@ -399,11 +399,10 @@ program
           summary: pipelineResult.summary
         });
 
+        printSection("Diff Preview");
         if (pipelineResult.diffText.trim().length > 0) {
-          printSection("Diff Preview");
           console.log(pipelineResult.diffText);
         } else {
-          printSection("Diff Preview");
           printField("Result", "No file content changes detected.");
         }
 
@@ -481,11 +480,10 @@ program
           summary: pipelineResult.summary
         });
 
+        printSection("Diff Preview");
         if (pipelineResult.diffText.trim().length > 0) {
-          printSection("Diff Preview");
           console.log(pipelineResult.diffText);
         } else {
-          printSection("Diff Preview");
           printField("Result", "No file content changes detected.");
         }
 

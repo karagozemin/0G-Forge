@@ -6,6 +6,7 @@ import { createManifest, isOgProject, readManifest } from "@og/core";
 import { MOCK_COMPUTE_ENDPOINT } from "@og/compute-client";
 import { DEFAULT_TEMPLATE_ID } from "./template-utils.js";
 import { createUnifiedDiff } from "./diff-utils.js";
+import { pathExists } from "./runtime-utils.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -263,14 +264,6 @@ function resolveProjectPath(projectDir: string, relativePath: string): string {
   return absolutePath;
 }
 
-async function pathExists(absolutePath: string): Promise<boolean> {
-  try {
-    await access(absolutePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function readFileIfExists(absolutePath: string): Promise<string> {
   if (!(await pathExists(absolutePath))) {

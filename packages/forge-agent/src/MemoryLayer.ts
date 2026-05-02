@@ -37,6 +37,7 @@ export class MemoryLayer {
     return entries.at(-1)?.value;
   }
 
+  // Replaces all existing entries for the key with a single new entry.
   async write(key: string, value: unknown): Promise<void> {
     const existing = this.cache.get(this.storeKey) ?? {
       entries: [],

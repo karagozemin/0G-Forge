@@ -118,12 +118,7 @@ export class AgentLoop {
           settled = true;
         } else if (decision === "retry") {
           attempt++;
-        } else {
-          skipped++;
-          settled = true;
-        }
-
-        if (decision === "abort") {
+        } else if (decision === "abort") {
           return {
             goalsTotal: this.steps.length,
             goalsCompleted: completed,
@@ -131,6 +126,9 @@ export class AgentLoop {
             reflections,
             durationMs: Date.now() - startMs
           };
+        } else {
+          skipped++;
+          settled = true;
         }
       }
     }
