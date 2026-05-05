@@ -249,7 +249,16 @@ export class ComputeClient {
       });
 
       const rawBody = await response.text();
-      const parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+      let parsedBody: unknown;
+      try {
+        parsedBody = rawBody.trim() ? (JSON.parse(rawBody) as unknown) : undefined;
+      } catch {
+        throw new ComputeProviderError(
+          `${options.operationLabel} returned non-JSON response from ${path}. Endpoint may not support this route.`,
+          "not-found",
+          response.status
+        );
+      }
 
       if (!response.ok) {
         const providerMessage = parseErrorMessage(parsedBody);
