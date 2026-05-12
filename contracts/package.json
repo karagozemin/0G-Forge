@@ -5,6 +5,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network zerog_galileo",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network zerog_mainnet",
     "deploy:local": "hardhat run scripts/deploy.ts --network hardhat",
     "verify": "hardhat verify --network zerog_galileo"
   },

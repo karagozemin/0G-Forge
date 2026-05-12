@@ -4,6 +4,8 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 const PRIVATE_KEY = process.env.OG_PRIVATE_KEY ?? "";
+const TESTNET_RPC = process.env.OG_EVM_RPC_TESTNET ?? "https://evmrpc-testnet.0g.ai";
+const MAINNET_RPC = process.env.OG_EVM_RPC_MAINNET ?? "https://evmrpc.0g.ai";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -15,13 +17,13 @@ const config: HardhatUserConfig = {
   },
   networks: {
     zerog_galileo: {
-      url: process.env.OG_EVM_RPC ?? "https://evmrpc-testnet.0g.ai",
+      url: TESTNET_RPC,
       chainId: 16602,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
     },
-    zerog_galileo: {
-      url: "https://evmrpc-testnet.0g.ai",
-      chainId: 80087,
+    zerog_mainnet: {
+      url: MAINNET_RPC,
+      chainId: 16661,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
     }
   }

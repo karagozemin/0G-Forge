@@ -143,7 +143,7 @@ export default function App() {
               0G Chain — on-chain registry
             </h3>
             <p className="text-sm leading-6 text-slate-200">
-              <code className="rounded bg-black/20 px-1 py-0.5">FrameworkRegistry</code> contract on Galileo Testnet stores the latest 0G Storage hash per project and registers framework entries on-chain.
+              <code className="rounded bg-black/20 px-1 py-0.5">FrameworkRegistry</code> contract on 0G Mainnet stores the latest 0G Storage hash per project and registers framework entries on-chain.
             </p>
           </article>
         </section>

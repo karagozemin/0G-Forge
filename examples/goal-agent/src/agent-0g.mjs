@@ -61,7 +61,7 @@ async function registerOnChain() {
 
   try {
     const { ethers } = await import("ethers");
-    const provider = new ethers.JsonRpcProvider(process.env.OG_EVM_RPC ?? "https://evmrpc-testnet.0g.ai");
+    const provider = new ethers.JsonRpcProvider(process.env.OG_EVM_RPC ?? "https://evmrpc.0g.ai");
     const signer = new ethers.Wallet(privateKey, provider);
     const abi = ["function registerFramework(string name, string version, string repoUrl) external"];
     const contract = new ethers.Contract(contractAddress, abi, signer);

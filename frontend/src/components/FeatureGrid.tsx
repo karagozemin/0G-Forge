@@ -23,7 +23,7 @@ const features = [
   },
   {
     title: "0G Chain Registry",
-    detail: "FrameworkRegistry contract on Galileo Testnet stores sync hashes and framework entries on-chain (chainId 16602).",
+    detail: "FrameworkRegistry contract on 0G Mainnet stores sync hashes and framework entries on-chain (chainId 16661).",
     icon: Link2
   },
   {

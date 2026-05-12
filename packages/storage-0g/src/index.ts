@@ -11,9 +11,9 @@ import {
 
 export const ZEROG_SYNC_PROVIDER_NAME = "0g-storage";
 
-// 0G Galileo Testnet (chainId 16602)
-const DEFAULT_EVM_RPC = "https://evmrpc-testnet.0g.ai";
-const DEFAULT_INDEXER_RPC = "https://indexer-storage-testnet-standard.0g.ai";
+// 0G Mainnet (chainId 16661)
+const DEFAULT_EVM_RPC = "https://evmrpc.0g.ai";
+const DEFAULT_INDEXER_RPC = "https://indexer-storage-turbo.0g.ai";
 
 const FRAMEWORK_REGISTRY_ABI = [
   "function setSyncHash(string calldata projectKey, string calldata fileHash) external",
@@ -58,7 +58,15 @@ async function uploadToZeroG(
   const indexer = new Indexer(options.indexerRpc);
 
   // upload(file, evmRpc, signer) — returns [tx, error]
-  const [tx, uploadErr] = await indexer.upload(memData, options.evmRpc, signer);
+  const [tx, uploadErr] = await (
+    indexer as unknown as {
+      upload: (
+        data: unknown,
+        rpc: string,
+        signer: ethers.Signer
+      ) => Promise<[unknown, unknown]>;
+    }
+  ).upload(memData, options.evmRpc, signer);
   if (uploadErr !== null) {
     throw new Error(`Failed to upload to 0G Storage: ${String(uploadErr)}`);
   }

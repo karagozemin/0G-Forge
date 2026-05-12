@@ -53,12 +53,13 @@ Activated with: `OG_STORAGE_ENABLED=1`
 
 ### On-Chain Registry (`contracts/FrameworkRegistry.sol`)
 
-Deployed on 0G Chain (EVM-compatible, chainId 16602):
+Deployed on 0G Chain (EVM-compatible, chainId 16661):
 - `registerFramework(name, version, repoUrl)` — publishes framework entries on-chain
 - `setSyncHash(projectKey, fileHash)` — stores latest 0G Storage pointer per project
 - `getSyncHash(projectKey)` — reads pointer for sync pull
 
-**Deployed contract address:** `0x495F79138BEc9c6241eC2fAC1524AB3e9214832E` (0G Chain Galileo Testnet, chainId 16602)
+**Deployed contract address (mainnet):** `0x47955e005433A548287358c4DFd6679A0e8F5d50` (0G Mainnet, chainId 16661)
+**Explorer link:** `https://chainscan.0g.ai/address/0x47955e005433A548287358c4DFd6679A0e8F5d50`
 
 ### Autonomous Goal Agent (`examples/goal-agent/`)
 
@@ -100,7 +101,7 @@ examples/goal-agent/src/agent-0g.mjs
 ## Submission Checklist
 
 - [x] Project name + short description
-- [x] **Contract deployment addresses** — `0x495F79138BEc9c6241eC2fAC1524AB3e9214832E` (Galileo, chainId 16602)
+- [x] **Contract deployment addresses** — mainnet address + explorer link (chainId 16661)
 - [x] Public GitHub repo with README + setup instructions
 - [ ] Demo video (<3 minutes) ← record with `./scripts/demo-flow.sh`
 - [ ] Live demo link
@@ -111,19 +112,20 @@ examples/goal-agent/src/agent-0g.mjs
 
 ## Steps to Complete Before Submitting
 
-1. **Deploy contract**
+1. **Deploy contract (mainnet)**
    ```bash
    cd contracts
    npm install
    cp .env.example .env        # add OG_PRIVATE_KEY
-   npm run deploy:testnet      # outputs contract address
+   npm run deploy:mainnet      # outputs contract address
    ```
    → paste address above and in `.env`
 
-2. **Test 0G Storage sync**
+2. **Test 0G Storage sync (mainnet)**
    ```bash
    export OG_STORAGE_ENABLED=1
-   export OG_STORAGE_INDEXER_RPC=https://indexer-storage-testnet-standard.0g.ai
+   export OG_STORAGE_INDEXER_RPC=https://indexer-storage-turbo.0g.ai
+   export OG_EVM_RPC=https://evmrpc.0g.ai
    export OG_PRIVATE_KEY=<key>
    export OG_REGISTRY_CONTRACT=<address>
    og init --template react-vite --dir /tmp/test-app --yes
@@ -160,7 +162,8 @@ Protocol features used:
 - 0G Chain (EVM): FrameworkRegistry contract for on-chain sync hash + framework registration
 
 Contract deployment addresses:
-- FrameworkRegistry: `0x495F79138BEc9c6241eC2fAC1524AB3e9214832E` (0G Chain Galileo Testnet, chainId 16602)
+- FrameworkRegistry: `0x47955e005433A548287358c4DFd6679A0e8F5d50` (0G Mainnet, chainId 16661)
+- Explorer: https://chainscan.0g.ai/address/0x47955e005433A548287358c4DFd6679A0e8F5d50
 
 GitHub: https://github.com/karagozemin/0g-forge
 Demo video: TBD

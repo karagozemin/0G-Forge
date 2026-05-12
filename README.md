@@ -45,7 +45,7 @@ packages/
 apps/
   cli/               # og CLI — all commands wired here
 contracts/
-  FrameworkRegistry  # Solidity — deployed on 0G Chain testnet
+  FrameworkRegistry  # Solidity — deployed on 0G Chain mainnet
 examples/
   goal-agent/        # Autonomous agent built on forge-agent runtime
     src/agent.mjs        # basic agent (mock mode)
@@ -135,7 +135,8 @@ og deploy vercel --yes
 ```bash
 # Set env vars (see .env.example in contracts/)
 export OG_STORAGE_ENABLED=1
-export OG_STORAGE_INDEXER_RPC=https://indexer-storage-testnet-standard.0g.ai
+export OG_STORAGE_INDEXER_RPC=https://indexer-storage-turbo.0g.ai
+export OG_EVM_RPC=https://evmrpc.0g.ai
 export OG_PRIVATE_KEY=<your_key>
 export OG_REGISTRY_CONTRACT=<deployed_contract_address>
 
@@ -180,12 +181,12 @@ What the 0G-native agent does:
 cd contracts
 npm install
 cp .env.example .env  # fill in OG_PRIVATE_KEY
-npm run deploy:testnet
+npm run deploy:mainnet
 ```
 
 The deploy script also registers "0G Forge" on-chain automatically.
 
-**Deployed contract:** see `HACKATHON_SUBMISSION.md` for the live address.
+**Deployed contract:** see `HACKATHON_SUBMISSION.md` for the mainnet address (0x47955e005433A548287358c4DFd6679A0e8F5d50).
 
 ## Environment variables
 
@@ -196,8 +197,8 @@ OG_COMPUTE_ENDPOINT=       # default: https://compute.0g.ai
 
 # 0G Storage sync (optional, enables decentralized sync)
 OG_STORAGE_ENABLED=1
-OG_STORAGE_INDEXER_RPC=    # e.g. https://indexer-storage-testnet-standard.0g.ai
-OG_EVM_RPC=                # default: https://evmrpc-testnet.0g.ai
+OG_STORAGE_INDEXER_RPC=    # default: https://indexer-storage-turbo.0g.ai
+OG_EVM_RPC=                # default: https://evmrpc.0g.ai
 OG_PRIVATE_KEY=            # wallet key for signing storage + chain txs
 OG_REGISTRY_CONTRACT=      # deployed FrameworkRegistry address
 
