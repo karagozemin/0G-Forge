@@ -1,4 +1,5 @@
 const DOCS_URL = "https://github.com/karagozemin/0G-Forge";
+const NPM_URL = "https://www.npmjs.com/package/@kaptan_web3/og-cli";
 
 const navItems = [
   { label: "How to Use", href: "#how-to-use" },
@@ -28,14 +29,24 @@ export function NavBar() {
           ))}
         </nav>
 
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded-lg border border-line bg-panel px-3 py-2 text-xs font-medium text-white transition hover:border-brand hover:text-brand md:text-sm"
-        >
-          View Docs
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center rounded-lg border border-line bg-panel px-3 py-2 text-xs font-medium text-white transition hover:border-brand hover:text-brand md:text-sm"
+          >
+            View Docs
+          </a>
+          <a
+            href={NPM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center rounded-lg border border-line bg-panel px-3 py-2 text-xs font-medium text-white transition hover:border-brand hover:text-brand md:text-sm"
+          >
+            npm
+          </a>
+        </div>
       </div>
     </header>
   );
