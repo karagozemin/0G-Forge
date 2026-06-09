@@ -24,6 +24,7 @@ import {
 import {
   ComputeGenerationProvider,
   applyPipelineResult,
+  probeProviderModels,
   runCreateEditPipeline
 } from "./create-edit-pipeline.js";
 import {
@@ -726,9 +727,27 @@ modelCommand
     withErrorHandling(async () => {
       const auth = await requireStoredAuth();
       const client = new ComputeClient({ endpoint: auth.endpoint });
-      const models = await client.listAvailableModels(auth);
+      let models = await client.listAvailableModels(auth);
 
       printSection("Model List");
+
+      if (isLikelyProxyFallbackCatalog(models)) {
+        const probedModels = await probeProviderModels({
+          endpoint: auth.endpoint,
+          token: auth.token
+        });
+
+        if (probedModels.length > 0) {
+          models = probedModels.map((id) => ({ id, name: `${id} (provider)` }));
+        } else {
+          printWarning(
+            "The configured endpoint does not expose a model catalog. The ids below are placeholders, not provider models."
+          );
+          printNextStep(
+            "Use an explicit provider model id, for example `--model deepseek/deepseek-chat-v3-0324`."
+          );
+        }
+      }
 
       const idWidth = Math.max(...models.map((model) => model.id.length), 2);
       const nameWidth = Math.max(...models.map((model) => model.name.length), 4);

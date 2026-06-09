@@ -82,9 +82,23 @@ function readPositiveIntEnv(
 
 const DEFAULT_GENERATION_TIMEOUT_MS = readPositiveIntEnv(
   "OG_GENERATION_TIMEOUT_MS",
-  45_000,
+  120_000,
   5_000,
-  300_000
+  600_000
+);
+// Budgets for embedding existing project files into the generation prompt.
+// Oversized context makes slow providers/proxies drop the connection.
+const MAX_PROMPT_FILE_CHARS = readPositiveIntEnv(
+  "OG_GENERATION_MAX_FILE_CHARS",
+  6_000,
+  500,
+  100_000
+);
+const MAX_PROMPT_TOTAL_CHARS = readPositiveIntEnv(
+  "OG_GENERATION_MAX_CONTEXT_CHARS",
+  32_000,
+  2_000,
+  500_000
 );
 const MAX_TRANSIENT_RETRIES = readPositiveIntEnv(
   "OG_GENERATION_MAX_RETRIES",
@@ -148,6 +162,8 @@ export type GenerationRequest = {
 
 export type GenerationProvider = {
   generatePlan(request: GenerationRequest): Promise<unknown>;
+  /** Model actually used for the last plan (may differ after provider fallback). */
+  lastModelUsed?: string;
 };
 
 export type PipelineRunOptions = {
@@ -759,16 +775,53 @@ function buildGenerationSystemPrompt(): string {
     "- paths must be relative and must not target .og",
     "- for delete actions omit content",
     "- for create/update include full file content",
+    "- never update files marked contentOmitted or truncated; their full content was not provided",
+    "- only touch files required by the request",
     "- keep output minimal and deterministic"
   ].join("\n");
 }
 
-function buildGenerationUserPrompt(request: GenerationRequest): string {
-  const existingFilesPreview = request.existingFiles.slice(0, 80).map((file) => ({
-    path: file.path,
-    content: file.content
-  }));
+type ExistingFilePreview = {
+  path: string;
+  content?: string;
+  contentOmitted?: true;
+};
 
+function buildExistingFilesPreview(files: ExistingProjectFile[]): ExistingFilePreview[] {
+  // Smaller files first so the budget covers as many full files as possible.
+  const ordered = files
+    .slice(0, 80)
+    .map((file, index) => ({ file, index }))
+    .sort((a, b) => a.file.content.length - b.file.content.length);
+
+  let usedChars = 0;
+  const previews = new Array<ExistingFilePreview>(ordered.length);
+
+  for (const { file, index } of ordered) {
+    if (usedChars >= MAX_PROMPT_TOTAL_CHARS) {
+      previews[index] = { path: file.path, contentOmitted: true };
+      continue;
+    }
+
+    const allowance = Math.min(MAX_PROMPT_FILE_CHARS, MAX_PROMPT_TOTAL_CHARS - usedChars);
+    if (file.content.length <= allowance) {
+      previews[index] = { path: file.path, content: file.content };
+      usedChars += file.content.length;
+      continue;
+    }
+
+    previews[index] = {
+      path: file.path,
+      content: `${file.content.slice(0, allowance)}\n/* ...truncated (${file.content.length - allowance} chars omitted)... */`,
+      contentOmitted: true
+    };
+    usedChars += allowance;
+  }
+
+  return previews;
+}
+
+function buildGenerationUserPrompt(request: GenerationRequest): string {
   return JSON.stringify(
     {
       mode: request.mode,
@@ -776,7 +829,7 @@ function buildGenerationUserPrompt(request: GenerationRequest): string {
       template: request.template,
       model: request.model,
       projectName: request.projectName,
-      existingFiles: existingFilesPreview
+      existingFiles: buildExistingFilesPreview(request.existingFiles)
     },
     null,
     2
@@ -807,7 +860,82 @@ function extractJsonFromCompletion(content: string): unknown {
   }
 }
 
+/**
+ * Discovers provider-accepted model ids on proxies that do not expose a
+ * /models catalog, by sending an intentionally invalid model and parsing
+ * the "accepted: [...]" list from the error response.
+ */
+export async function probeProviderModels(options: {
+  endpoint: string;
+  token: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}): Promise<string[]> {
+  const endpoint = options.endpoint.trim().replace(/\/+$/, "");
+  if (!isHttpEndpoint(endpoint)) {
+    return [];
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 10_000;
+
+  for (const routePath of CHAT_COMPLETION_PATHS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetchImpl(`${endpoint}${routePath}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${options.token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          model: "__og_model_probe__",
+          messages: [{ role: "user", content: "probe" }],
+          max_tokens: 1
+        }),
+        signal: controller.signal
+      });
+
+      const rawBody = await response.text();
+      const parsed = safeParseJson(rawBody);
+      const providerMessage = parsed.ok
+        ? parseProviderErrorMessage(parsed.value)
+        : rawBody;
+
+      const accepted = parseAcceptedModelsFromError(providerMessage || rawBody);
+      if (accepted.length > 0) {
+        return accepted;
+      }
+    } catch {
+      continue;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return [];
+}
+
+function parseAcceptedModelsFromError(message: string): string[] {
+  const listMatch = message.match(/accepted:\s*\[([^\]]*)\]/i);
+  if (!listMatch) {
+    return [];
+  }
+
+  const models: string[] = [];
+  for (const quoted of listMatch[1].matchAll(/"([^"]+)"/g)) {
+    models.push(quoted[1]);
+  }
+
+  return models;
+}
+
 export class ComputeGenerationProvider implements GenerationProvider {
+  lastModelUsed?: string;
+
   constructor(
     private readonly options: {
       endpoint: string;
@@ -818,6 +946,33 @@ export class ComputeGenerationProvider implements GenerationProvider {
   ) {}
 
   async generatePlan(request: GenerationRequest): Promise<unknown> {
+    this.lastModelUsed = request.model;
+
+    try {
+      return await this.executePlan(request);
+    } catch (error) {
+      if (
+        error instanceof GenerationProviderRuntimeError &&
+        error.code === "unsupported-model"
+      ) {
+        const fallbackModel = parseAcceptedModelsFromError(error.message).find(
+          (id) => id !== request.model
+        );
+
+        if (fallbackModel) {
+          console.error(
+            `⚠ Model '${request.model}' is not supported by the provider. Retrying with provider model '${fallbackModel}'.`
+          );
+          this.lastModelUsed = fallbackModel;
+          return await this.executePlan({ ...request, model: fallbackModel });
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  private async executePlan(request: GenerationRequest): Promise<unknown> {
     const endpoint = this.options.endpoint.trim().replace(/\/+$/, "");
 
     if (isMockEndpoint(endpoint)) {
@@ -1170,7 +1325,7 @@ export async function runCreateEditPipeline(options: PipelineRunOptions): Promis
   return {
     summary: structuredPlan.summary,
     template: structuredPlan.template,
-    model,
+    model: options.provider.lastModelUsed ?? model,
     projectName,
     changes,
     diffText: diffSections.join("\n"),

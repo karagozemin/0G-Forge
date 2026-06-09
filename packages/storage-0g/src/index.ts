@@ -14,6 +14,8 @@ export const ZEROG_SYNC_PROVIDER_NAME = "0g-storage";
 // 0G Mainnet (chainId 16661)
 const DEFAULT_EVM_RPC = "https://evmrpc.0g.ai";
 const DEFAULT_INDEXER_RPC = "https://indexer-storage-turbo.0g.ai";
+// FrameworkRegistry deployed on 0G Mainnet.
+const DEFAULT_REGISTRY_CONTRACT = "0x47955e005433A548287358c4DFd6679A0e8F5d50";
 
 const FRAMEWORK_REGISTRY_ABI = [
   "function setSyncHash(string calldata projectKey, string calldata fileHash) external",
@@ -27,27 +29,34 @@ export type ZeroGSyncProviderOptions = {
   contractAddress: string;
 };
 
+function normalizePrivateKey(rawKey: string): string {
+  const trimmed = rawKey.trim().replace(/^["']|["']$/g, "");
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
 function resolveOptions(): ZeroGSyncProviderOptions {
   const indexerRpc = process.env.OG_STORAGE_INDEXER_RPC?.trim() || DEFAULT_INDEXER_RPC;
   const evmRpc = process.env.OG_EVM_RPC?.trim() || DEFAULT_EVM_RPC;
   const privateKey = process.env.OG_PRIVATE_KEY?.trim();
-  const contractAddress = process.env.OG_REGISTRY_CONTRACT?.trim();
+  const contractAddress = process.env.OG_REGISTRY_CONTRACT?.trim() || DEFAULT_REGISTRY_CONTRACT;
 
   if (!privateKey) {
     throw new Error("OG_PRIVATE_KEY is required for 0G Storage sync provider.");
   }
-  if (!contractAddress) {
-    throw new Error("OG_REGISTRY_CONTRACT is required for 0G Storage sync provider.");
-  }
 
-  return { indexerRpc, evmRpc, privateKey, contractAddress };
+  return {
+    indexerRpc,
+    evmRpc,
+    privateKey: normalizePrivateKey(privateKey),
+    contractAddress
+  };
 }
 
 async function uploadToZeroG(
   payload: SyncPayload,
   options: ZeroGSyncProviderOptions
 ): Promise<string> {
-  const { Indexer, MemData } = await import("@0glabs/0g-ts-sdk");
+  const { Indexer, MemData } = await import("@0gfoundation/0g-storage-ts-sdk");
 
   const provider = new ethers.JsonRpcProvider(options.evmRpc);
   const signer = new ethers.Wallet(options.privateKey, provider);
@@ -84,7 +93,7 @@ async function downloadFromZeroG(
   rootHash: string,
   options: ZeroGSyncProviderOptions
 ): Promise<SyncPayload> {
-  const { Indexer } = await import("@0glabs/0g-ts-sdk");
+  const { Indexer } = await import("@0gfoundation/0g-storage-ts-sdk");
 
   const indexer = new Indexer(options.indexerRpc);
 
