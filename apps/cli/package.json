@@ -49,7 +49,6 @@
   "devDependencies": {
     "@og/compute-client": "workspace:*",
     "@og/core": "workspace:*",
-    "@og/deploy-vercel": "workspace:*",
     "@og/storage": "workspace:*",
     "@og/storage-0g": "workspace:*",
     "tsup": "^8.2.4",

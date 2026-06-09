@@ -4,3 +4,6 @@ dist
 .env
 *.tsbuildinfo
 apps/cli/assets/
+*.tgz
+.claude/
+examples/goal-agent/state/

@@ -4,13 +4,7 @@ const shared = {
   entry: ["src/index.ts", "src/template-utils.ts"],
   outDir: "dist",
   target: "es2022",
-  noExternal: [
-    "@og/core",
-    "@og/compute-client",
-    "@og/storage",
-    "@og/storage-0g",
-    "@og/deploy-vercel"
-  ]
+  noExternal: ["@og/core", "@og/compute-client", "@og/storage", "@og/storage-0g"]
 } as const;
 
 export default defineConfig([

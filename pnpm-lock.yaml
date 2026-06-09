@@ -39,9 +39,6 @@ importers:
       '@og/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@og/deploy-vercel':
-        specifier: workspace:*
-        version: link:../../packages/deploy-vercel
       '@og/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -82,15 +79,6 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
-    devDependencies:
-      tsup:
-        specifier: ^8.2.4
-        version: 8.5.1(tsx@4.21.0)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-
-  packages/deploy-vercel:
     devDependencies:
       tsup:
         specifier: ^8.2.4

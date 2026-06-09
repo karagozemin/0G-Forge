@@ -41,7 +41,6 @@ packages/
   compute-client/    # 0G Compute auth + model client
   storage/           # SyncProvider interface + local-file provider
   storage-0g/        # 0G Storage SyncProvider (Indexer + contract)
-  deploy-vercel/     # Vercel deploy runner
 apps/
   cli/               # og CLI — all commands wired here
 contracts/
@@ -232,7 +231,6 @@ packages/core/         # .og state (manifest, history)
 packages/compute-client/ # 0G Compute auth + model client
 packages/storage/      # SyncProvider interface + local-file provider
 packages/storage-0g/   # 0G Storage SyncProvider (NEW)
-packages/deploy-vercel/ # Vercel deploy runner
 contracts/             # FrameworkRegistry.sol — 0G Chain (NEW)
 examples/goal-agent/   # Autonomous agent example
   src/agent.mjs        # basic version (mock)
