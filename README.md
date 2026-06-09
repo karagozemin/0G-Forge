@@ -213,7 +213,7 @@ npm run deploy:mainnet
 
 The deploy script also registers "0G Forge" on-chain automatically.
 
-**Deployed contract:** see `HACKATHON_SUBMISSION.md` for the mainnet address (0x47955e005433A548287358c4DFd6679A0e8F5d50).
+**Deployed contract (0G Mainnet):** [`0x47955e005433A548287358c4DFd6679A0e8F5d50`](https://chainscan.0g.ai/address/0x47955e005433A548287358c4DFd6679A0e8F5d50)
 
 ## Environment variables
 

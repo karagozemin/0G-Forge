@@ -96,7 +96,7 @@ pnpm --filter @og/cli run dev --help
 ./scripts/demo-flow.sh --mode mock
 ```
 
-For real proxy demo commands and speaking notes, see `DEMO.md`.
+For a real-endpoint run: `./scripts/demo-flow.sh --mode real --token "$OG_COMPUTE_TOKEN"`.
 
 ## How builders use this (practical flow)
 
@@ -202,10 +202,9 @@ scripts/demo-flow.sh   # reproducible short demo runner
 
 ## Where reviewers should look next
 
-- `DEMO.md`: exact live demo sequence (real + fallback)
-- `SHOWCASE.md`: concise judge-facing snapshot (what works, limits, value)
-- `HACKATHON_SUBMISSION.md`: dual-track submission checklist and payload template
+- `SHOWCASE.md`: concise snapshot (what works, limits, value)
 - `examples/goal-agent/`: working autonomous agent example built on top of `og`
+- `scripts/demo-flow.sh`: reproducible end-to-end demo runner
 
 ## Validation commands
 
