@@ -29,7 +29,7 @@ It helps builders go from prompt to project changes, preview locally, deploy to 
 5. `og deploy vercel --yes`
 6. `og sync push`
 
-See `DEMO.md` for exact commands.
+For a reproducible end-to-end run: `./scripts/demo-flow.sh --mode real --token "$OG_COMPUTE_TOKEN"`.
 
 ## What is real vs mocked
 
