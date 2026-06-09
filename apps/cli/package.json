@@ -1,7 +1,15 @@
 {
   "name": "@kaptan_web3/og-cli",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Terminal-native companion for building and shipping 0G app MVPs.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karagozemin/0G.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/karagozemin/0G#readme",
+  "bugs": "https://github.com/karagozemin/0G/issues",
   "keywords": [
     "0g",
     "cli",
