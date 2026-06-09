@@ -135,8 +135,9 @@ og sync push
 
 ### Notes for first-time users
 
-- If you see timeout/rate-limit errors in real mode, retry or switch to `mock://local` for deterministic demos.
-- If you see timeout/rate-limit errors in real mode, retry with a short cooldown and keep using your real endpoint.
+- `og model list` discovers the model ids your provider actually accepts, even on proxies without a `/models` catalog.
+- If your default model is not supported by the provider, `og create`/`og edit` automatically retries with a provider-accepted model and tells you which one was used.
+- If you see timeout/rate-limit errors in real mode, retry with a short cooldown; the generation timeout defaults to 120s and can be tuned with `OG_GENERATION_TIMEOUT_MS`.
 - `create` and `edit` are easiest to start with `--dry-run` so you can inspect plan and diff output before writing files.
 - Upgrade globally with `npm install -g @kaptan_web3/og-cli@latest`.
 - Remove globally with `npm uninstall -g @kaptan_web3/og-cli`.
@@ -162,7 +163,7 @@ Supported templates: `react-vite`, `nextjs-app`, `static-landing`.
 - generation requests to OpenAI-compatible proxy routes
 - local preview execution
 - Vercel deployment flow
-- metadata sync push/pull via configured sync provider abstraction (default local-file)
+- metadata sync push/pull: local-file provider by default, real 0G Storage + 0G Chain with `OG_STORAGE_ENABLED=1` and `OG_PRIVATE_KEY`
 
 **Mock path**
 - mock endpoints are disabled by default for end users
@@ -170,10 +171,10 @@ Supported templates: `react-vite`, `nextjs-app`, `static-landing`.
 
 ## Current limitations (truthful)
 
-During real provider usage, generation calls may intermittently fail due to upstream capacity conditions (for example `429` rate limits, concurrent request caps, timeout windows, or transient socket closes). The CLI now includes bounded retries and clearer diagnostics, but end-to-end success still depends on live provider availability at request time.
+During real provider usage, generation calls may intermittently fail due to upstream capacity conditions (for example `429` rate limits or concurrent request caps). The CLI includes bounded retries, prompt-context budgeting for large projects, automatic model fallback, and clearer diagnostics — but end-to-end success still depends on live provider availability at request time.
 
-- Real-provider generation can still fail due to timeout/rate limits.
-- Deploy target is Vercel only.
+- Real-provider generation can still fail under upstream rate limits.
+- Deploy target is Vercel only (requires the `vercel` CLI installed and logged in).
 - Sync is lightweight metadata sync, not full project backup/restore.
 - Template set is intentionally narrow.
 
@@ -184,7 +185,11 @@ apps/cli/              # CLI implementation, packaging, runtime wiring
 packages/core/         # .og state schema/helpers
 packages/compute-client/ # auth + model/endpoint client
 packages/storage/      # sync provider abstraction + local-file provider
+packages/storage-0g/   # 0G Storage + 0G Chain sync provider
+packages/forge-agent/  # agent runtime (AgentLoop, ToolRegistry, MemoryLayer)
+contracts/             # FrameworkRegistry.sol — deployed on 0G mainnet
 templates/             # starter templates copied by `og init`
+examples/goal-agent/   # autonomous agent example built on top of og
 scripts/demo-flow.sh   # reproducible short demo runner
 ```
 

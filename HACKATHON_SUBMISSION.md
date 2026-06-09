@@ -121,13 +121,10 @@ examples/goal-agent/src/agent-0g.mjs
    ```
    → paste address above and in `.env`
 
-2. **Test 0G Storage sync (mainnet)**
+2. **Test 0G Storage sync (mainnet)** — RPCs and registry contract default to mainnet values
    ```bash
    export OG_STORAGE_ENABLED=1
-   export OG_STORAGE_INDEXER_RPC=https://indexer-storage-turbo.0g.ai
-   export OG_EVM_RPC=https://evmrpc.0g.ai
    export OG_PRIVATE_KEY=<key>
-   export OG_REGISTRY_CONTRACT=<address>
    og init --template react-vite --dir /tmp/test-app --yes
    og sync push
    ```

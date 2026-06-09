@@ -104,8 +104,10 @@ og --help
 ```bash
 og login \
   --token "$OG_COMPUTE_TOKEN" \
-  --endpoint "https://compute.0g.ai"
+  --endpoint "https://compute-network-4.integratenetwork.work/v1/proxy"
 ```
+
+Any OpenAI-compatible 0G Compute proxy endpoint works. After login, `og model list` discovers the models your provider actually accepts. If your project's default model is not supported by the provider, `og create`/`og edit` automatically retries with a provider-accepted model.
 
 ### 2) Init a project
 
@@ -131,17 +133,17 @@ og deploy vercel --yes
 
 ### 5) Sync metadata to 0G Storage
 
+Only a funded 0G mainnet wallet key is required — RPC endpoints and the registry contract default to 0G mainnet values:
+
 ```bash
-# Set env vars (see .env.example in contracts/)
 export OG_STORAGE_ENABLED=1
-export OG_STORAGE_INDEXER_RPC=https://indexer-storage-turbo.0g.ai
-export OG_EVM_RPC=https://evmrpc.0g.ai
 export OG_PRIVATE_KEY=<your_key>
-export OG_REGISTRY_CONTRACT=<deployed_contract_address>
 
 og sync push   # uploads payload to 0G Storage, stores hash on 0G Chain
 og sync pull   # reads hash from chain, downloads from 0G Storage
 ```
+
+Without `OG_STORAGE_ENABLED=1`, sync falls back to a local-file provider (no network, no wallet needed).
 
 ## 0G Protocol Integration
 
@@ -161,9 +163,7 @@ node examples/goal-agent/src/agent.mjs --apply
 
 # 0G-native (uses 0G Storage memory + 0G Chain registration + reflection loop)
 OG_STORAGE_ENABLED=1 \
-OG_STORAGE_INDEXER_RPC=<rpc> \
 OG_PRIVATE_KEY=<key> \
-OG_REGISTRY_CONTRACT=<address> \
 node examples/goal-agent/src/agent-0g.mjs --apply --max-steps 3
 ```
 
@@ -192,14 +192,19 @@ The deploy script also registers "0G Forge" on-chain automatically.
 ```bash
 # 0G Compute (required for real generation)
 OG_COMPUTE_TOKEN=          # your compute API token
-OG_COMPUTE_ENDPOINT=       # default: https://compute.0g.ai
+OG_COMPUTE_ENDPOINT=       # OpenAI-compatible proxy endpoint (set during `og login`)
 
 # 0G Storage sync (optional, enables decentralized sync)
 OG_STORAGE_ENABLED=1
-OG_STORAGE_INDEXER_RPC=    # default: https://indexer-storage-turbo.0g.ai
-OG_EVM_RPC=                # default: https://evmrpc.0g.ai
-OG_PRIVATE_KEY=            # wallet key for signing storage + chain txs
-OG_REGISTRY_CONTRACT=      # deployed FrameworkRegistry address
+OG_PRIVATE_KEY=            # wallet key for signing storage + chain txs (required)
+OG_STORAGE_INDEXER_RPC=    # default: https://indexer-storage-turbo.0g.ai (mainnet)
+OG_EVM_RPC=                # default: https://evmrpc.0g.ai (mainnet)
+OG_REGISTRY_CONTRACT=      # default: 0x47955e005433A548287358c4DFd6679A0e8F5d50 (mainnet)
+
+# Generation tuning (optional)
+OG_GENERATION_TIMEOUT_MS=          # default: 120000
+OG_GENERATION_MAX_FILE_CHARS=      # default: 6000  (per-file prompt context budget)
+OG_GENERATION_MAX_CONTEXT_CHARS=   # default: 32000 (total prompt context budget)
 
 # Developer mock mode (local testing only)
 OG_ENABLE_MOCK_MODE=1      # enables mock://local endpoint
