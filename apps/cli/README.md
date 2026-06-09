@@ -14,14 +14,14 @@ og --version
 og --help
 ```
 
-If you see `EEXIST` for `og`:
+If you see `EEXIST` for `og`, an older global install owns the `og` command. Remove it and reinstall:
 
 ```bash
-npm uninstall -g @og/cli
+npm uninstall -g @kaptan_web3/og-cli
 npm install -g @kaptan_web3/og-cli
 ```
 
-## 2-minute reviewer overview
+## 2-minute overview
 
 **Problem:** builders lose time switching between tools for generation, local run, deploy, and state handoff.
 
@@ -34,11 +34,11 @@ npm install -g @kaptan_web3/og-cli
 - runtime/deploy: `og preview`, `og deploy vercel`
 - metadata handoff: `og sync push`, `og sync pull`
 
-## Submission framing (judge/hackathon)
+## Why this exists
 
 **What is unique here**
 - terminal-first, prompt-to-app flow with plan/diff before apply
-- real proxy-compatible generation path + deterministic mock fallback
+- real proxy-compatible generation path (plus an opt-in local mock mode for offline demos)
 - deploy + lightweight sync included in the same command surface
 
 **Why it matters for builders**
@@ -73,10 +73,10 @@ og --version
 og --help
 ```
 
-If you see `EEXIST` for `og`, remove the old global package and reinstall:
+If you see `EEXIST` for `og`, an older global install owns the `og` command. Remove it and reinstall:
 
 ```bash
-npm uninstall -g @og/cli
+npm uninstall -g @kaptan_web3/og-cli
 npm install -g @kaptan_web3/og-cli
 ```
 
@@ -87,7 +87,7 @@ git clone <repo-url>
 cd 0G
 pnpm install
 pnpm build
-pnpm --filter @og/cli run dev --help
+pnpm --filter @kaptan_web3/og-cli run dev --help
 ```
 
 ### 60–120 second demo
@@ -200,7 +200,7 @@ examples/goal-agent/   # autonomous agent example built on top of og
 scripts/demo-flow.sh   # reproducible short demo runner
 ```
 
-## Where reviewers should look next
+## Where to look next
 
 - `SHOWCASE.md`: concise snapshot (what works, limits, value)
 - `examples/goal-agent/`: working autonomous agent example built on top of `og`

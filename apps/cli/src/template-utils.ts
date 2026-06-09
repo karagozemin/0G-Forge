@@ -96,7 +96,7 @@ function resolveCatalogLocation(): CatalogLocation {
   }
 
   throw new Error(
-    "Could not locate template catalog. If using an installed package, reinstall or run `pnpm --filter @og/cli run prepare:assets` before packaging."
+    "Could not locate template catalog. If using an installed package, reinstall or run `pnpm --filter @kaptan_web3/og-cli run prepare:assets` before packaging."
   );
 }
 

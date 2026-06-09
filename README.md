@@ -245,7 +245,7 @@ git clone <repo-url>
 cd 0G
 pnpm install
 pnpm build
-pnpm --filter @og/cli run dev --help
+pnpm --filter @kaptan_web3/og-cli run dev --help
 ```
 
 ## Validation

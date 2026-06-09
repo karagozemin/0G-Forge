@@ -1,0 +1,6 @@
+# Allow esbuild's install script so `pnpm install` works out of the box.
+# `allowBuilds` is for pnpm >= 11, `onlyBuiltDependencies` for pnpm 10.
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild

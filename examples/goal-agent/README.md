@@ -1,6 +1,6 @@
 # Goal Agent Example
 
-This is a minimal autonomous single-agent example for 0G hackathon submissions.
+This is a minimal autonomous single-agent example built on top of the `og` CLI.
 
 The agent:
 - logs in through `og` CLI (mock endpoint by default)
