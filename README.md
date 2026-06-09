@@ -97,6 +97,34 @@ og --version
 og --help
 ```
 
+## Before you start
+
+Not every command needs setup. What each step requires:
+
+| Command | What you need |
+|---|---|
+| `og init`, `og preview` | Nothing — works fully offline |
+| `og create` / `og edit` | An inference endpoint + token (see below) |
+| `og sync push/pull` (0G mode) | A 0G mainnet wallet with a small balance (storage fee + gas, well under 0.1 0G per sync) |
+| `og deploy vercel` | [Vercel CLI](https://vercel.com/docs/cli) installed and logged in (`npm i -g vercel && vercel login`) |
+
+### Getting an inference endpoint + token
+
+`og` talks to any **OpenAI-compatible** chat-completions API. Use whichever you have access to:
+
+- **0G Compute proxy** — if you have a token from a 0G Compute provider, use it directly (this is the recommended path; example endpoint shown in Quick start below).
+- **Any OpenAI-compatible provider** — endpoints exposing `/chat/completions` or `/v1/chat/completions` work with `og login --endpoint <url> --token <key>`.
+
+After login, run `og model list` — it discovers the model ids your provider actually accepts, even if the endpoint has no `/models` catalog. If your project's default model is rejected, `og create`/`og edit` automatically retries with a provider-accepted model.
+
+### Getting a 0G wallet for sync (optional)
+
+`og sync` works without any wallet (local-file mode). To sync through real **0G Storage + 0G Chain**:
+
+1. Use any EVM wallet; export its private key as `OG_PRIVATE_KEY` (with or without the `0x` prefix).
+2. Fund it with a small amount of **0G** on 0G Mainnet (chain id 16661, RPC `https://evmrpc.0g.ai`).
+3. Set `OG_STORAGE_ENABLED=1`. That's all — RPC endpoints and the registry contract default to mainnet values.
+
 ## Quick start
 
 ### 1) Login with 0G Compute credentials

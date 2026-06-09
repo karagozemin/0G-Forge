@@ -53,10 +53,17 @@ npm install -g @kaptan_web3/og-cli
 ## Quick start
 
 ### Prerequisites
-- Node.js
-- npm
-- `pnpm` (only if you want to run from source)
-- `vercel` CLI (for deploy commands)
+
+Per-command requirements — start with zero setup and add as you go:
+
+| Command | Requirement |
+|---|---|
+| `og init`, `og preview` | Node.js ≥ 18 only |
+| `og create` / `og edit` | Token for any OpenAI-compatible endpoint (e.g. a 0G Compute proxy) |
+| `og sync push/pull` (0G mode) | 0G mainnet wallet with a small balance; set `OG_STORAGE_ENABLED=1` + `OG_PRIVATE_KEY` |
+| `og deploy vercel` | `vercel` CLI installed and logged in |
+
+Without `OG_STORAGE_ENABLED=1`, sync uses a local-file provider and needs no wallet. `pnpm` is only needed to run from source.
 
 ### Install globally from npm (recommended)
 
